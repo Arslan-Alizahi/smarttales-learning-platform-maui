@@ -1,0 +1,998 @@
+@page "/submitted-assignments"
+@using SmartTales.Service
+@using SmartTales.Model
+@using SmartTales.Data
+@using SmartTales.Repository.IRepository
+@inject AssignmentService AssignmentService
+@inject GradeService GradeService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<SmartTales.Components.Shared.Header Title="Student Submissions" />
+
+<div class="submissions-container">
+    <div class="header">
+        <div class="header-content">
+            <h1>Student Submissions</h1>
+            <p class="subtitle">Review and download student assignment submissions</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn-secondary" @onclick="RefreshSubmissions">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+            <button class="btn-primary" @onclick="GoBackToDashboard">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </button>
+        </div>
+    </div>
+
+    <div class="filter-section">
+        <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" placeholder="Search by student name or assignment..." @bind="searchQuery" @bind:event="oninput" @onkeyup="FilterSubmissions" />
+        </div>
+        <div class="filter-dropdown">
+            <select value="@currentFilter" @onchange="HandleFilterChange">
+                <option value="all">All Classes</option>
+                <option value="Class 10A">Class 10A</option>
+                <option value="Class 10B">Class 10B</option>
+                <option value="Class 11A">Class 11A</option>
+                <option value="Class 11B">Class 11B</option>
+                <option value="Class 12A">Class 12A</option>
+                <option value="Class 12B">Class 12B</option>
+            </select>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-container">
+            <div class="spinner"></div>
+            <p>Loading submissions...</p>
+        </div>
+    }
+    else if (filteredSubmissions.Count == 0)
+    {
+        <div class="no-submissions">
+            <i class="bi bi-inbox"></i>
+            <h3>No submissions found</h3>
+            <p>Student submissions will appear here when they submit their assignments.</p>
+            <button class="btn-primary" @onclick="GoBackToDashboard">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="submissions-grid">
+            @foreach (var submission in filteredSubmissions)
+            {
+                <div class="submission-card">
+                    <div class="submission-header">
+                        <div class="student-info">
+                            <div class="student-avatar">@submission.StudentInitials</div>
+                            <div class="student-details">
+                                <h3>@submission.StudentName</h3>
+                                <span class="grade-level">@submission.GradeLevel</span>
+                                <span class="student-email">@submission.StudentEmail</span>
+                            </div>
+                        </div>
+                        <div class="submission-meta">
+                            <span class="submission-time">@submission.SubmissionTimeFormatted</span>
+                            <span class="time-ago">@submission.SubmissionTimeAgo</span>
+                        </div>
+                    </div>
+
+                    <div class="assignment-info">
+                        <h4>@submission.AssignmentTitle</h4>
+                        <p class="assignment-description">@submission.AssignmentDescription</p>
+                        <div class="assignment-details">
+                            <span class="class-name"><i class="bi bi-book"></i> @submission.Class</span>
+                            <span class="due-date"><i class="bi bi-calendar"></i> Due: @submission.DueDate.ToString("MMM dd, yyyy")</span>
+                            <span class="points"><i class="bi bi-star"></i> @submission.Points pts</span>
+                        </div>
+                    </div>
+
+                    @if (submission.HasFiles)
+                    {
+                        <div class="submission-files">
+                            <div class="files-header">
+                                <i class="bi bi-paperclip"></i>
+                                <span>@submission.FileCount file(s) submitted</span>
+                            </div>
+                            <SmartTales.Components.Shared.FileDownloadComponent Files="submission.SubmittedFiles" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="no-files">
+                            <i class="bi bi-file-x"></i>
+                            <span>No files submitted</span>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(submission.SubmissionNotes))
+                    {
+                        <div class="submission-notes">
+                            <h5><i class="bi bi-chat-text"></i> Student Notes:</h5>
+                            <p>@submission.SubmissionNotes</p>
+                        </div>
+                    }
+
+                    <!-- Grading Section -->
+                    <div class="grading-section">
+                        @if (submission.IsGraded)
+                        {
+                            <div class="grade-display">
+                                <div class="grade-header">
+                                    <h5><i class="bi bi-award"></i> Grade</h5>
+                                    <span class="grade-badge" style="background-color: @submission.GradeColor">
+                                        @submission.GradeDisplay
+                                    </span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(submission.Feedback))
+                                {
+                                    <div class="teacher-feedback">
+                                        <strong>Teacher Feedback:</strong>
+                                        <p>@submission.Feedback</p>
+                                    </div>
+                                }
+                                <div class="grade-meta">
+                                    <small>Graded @submission.GradedTimeAgo by @submission.TeacherName</small>
+                                </div>
+                                <button class="btn-edit-grade" @onclick="() => StartEditingGrade(submission)">
+                                    <i class="bi bi-pencil"></i> Edit Grade
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="grade-form">
+                                <h5><i class="bi bi-pencil-square"></i> Grade Assignment</h5>
+                                <button class="btn-grade" @onclick="() => StartGrading(submission)">
+                                    <i class="bi bi-plus-circle"></i> Add Grade
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Grading Modal -->
+@if (showGradingModal && currentGradingSubmission != null)
+{
+    <div class="modal-overlay" @onclick="CancelGrading">
+        <div class="grading-modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Grade Assignment</h3>
+                <button class="close-btn" @onclick="CancelGrading">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+
+            <div class="modal-content">
+                <div class="student-assignment-info">
+                    <h4>@currentGradingSubmission.StudentName</h4>
+                    <p>@currentGradingSubmission.AssignmentTitle</p>
+                    <span class="max-points">Max Points: @currentGradingSubmission.AssignmentPoints</span>
+                </div>
+
+                <div class="grade-input-section">
+                    <div class="input-group">
+                        <label for="numericalGrade">Numerical Grade:</label>
+                        <input type="number" id="numericalGrade" @bind="gradeForm.NumericalGrade"
+                               min="0" max="@currentGradingSubmission.AssignmentPoints" step="0.1"
+                               placeholder="Enter grade" />
+                        <span class="input-suffix">/ @currentGradingSubmission.AssignmentPoints</span>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="letterGrade">Letter Grade:</label>
+                        <select id="letterGrade" @bind="gradeForm.LetterGrade">
+                            <option value="">Auto-calculate</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                            <option value="F">F</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="feedback">Teacher Feedback:</label>
+                        <textarea id="feedback" @bind="gradeForm.Feedback"
+                                  placeholder="Enter feedback for the student..." rows="4"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-cancel" @onclick="CancelGrading">Cancel</button>
+                <button class="btn-save" @onclick="SaveGrade" disabled="@isSavingGrade">
+                    @if (isSavingGrade)
+                    {
+                        <i class="bi bi-hourglass-split"></i> @("Saving...")
+                    }
+                    else
+                    {
+                        <i class="bi bi-check"></i> @("Save Grade")
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<BottomNavBar CurrentPage="submitted-assignments" />
+
+<style>
+    .submissions-container {
+        padding: 1rem;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #e9ecef;
+    }
+
+    .header-content h1 {
+        margin: 0;
+        color: #333;
+        font-size: 2rem;
+    }
+
+    .subtitle {
+        margin: 0.5rem 0 0 0;
+        color: #6c757d;
+        font-size: 1rem;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .btn-primary, .btn-secondary {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+        background: #007bff;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #0056b3;
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #545b62;
+    }
+
+    .filter-section {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        align-items: center;
+    }
+
+    .search-box {
+        position: relative;
+        flex: 1;
+        max-width: 400px;
+    }
+
+    .search-box i {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 0.75rem 1rem 0.75rem 2.5rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 1rem;
+    }
+
+    .filter-dropdown select {
+        padding: 0.75rem 1rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 1rem;
+        background: white;
+        cursor: pointer;
+    }
+
+    .loading-container {
+        text-align: center;
+        padding: 3rem;
+    }
+
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1rem;
+    }
+
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .submissions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .submission-card {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .submission-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .submission-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+
+    .student-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .student-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 1.2rem;
+    }
+
+    .student-details h3 {
+        margin: 0;
+        color: #333;
+        font-size: 1.1rem;
+    }
+
+    .grade-level, .student-email {
+        display: block;
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+
+    .submission-meta {
+        text-align: right;
+    }
+
+    .submission-time {
+        display: block;
+        font-weight: 500;
+        color: #333;
+        font-size: 0.9rem;
+    }
+
+    .time-ago {
+        display: block;
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+
+    .assignment-info {
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #f8f9fa;
+    }
+
+    .assignment-info h4 {
+        margin: 0 0 0.5rem 0;
+        color: #333;
+        font-size: 1.2rem;
+    }
+
+    .assignment-description {
+        color: #6c757d;
+        margin: 0 0 1rem 0;
+        line-height: 1.4;
+    }
+
+    .assignment-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .assignment-details span {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+
+    .submission-files {
+        margin-bottom: 1rem;
+    }
+
+    .files-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        color: #333;
+    }
+
+    .no-files {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        color: #6c757d;
+        font-style: italic;
+    }
+
+    .submission-notes {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #007bff;
+    }
+
+    .submission-notes h5 {
+        margin: 0 0 0.5rem 0;
+        color: #333;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .submission-notes p {
+        margin: 0;
+        color: #555;
+        line-height: 1.4;
+    }
+
+    .no-submissions {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: #6c757d;
+    }
+
+    .no-submissions i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        color: #dee2e6;
+    }
+
+    .no-submissions h3 {
+        margin: 0 0 1rem 0;
+        color: #6c757d;
+    }
+
+    .no-submissions p {
+        margin: 0 0 2rem 0;
+        font-size: 1.1rem;
+    }
+
+    /* Grading Section Styles */
+    .grading-section {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e9ecef;
+    }
+
+    .grade-display {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #28a745;
+    }
+
+    .grade-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .grade-header h5 {
+        margin: 0;
+        color: #333;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .grade-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        color: white;
+        font-weight: bold;
+        font-size: 0.9rem;
+    }
+
+    .teacher-feedback {
+        margin: 0.75rem 0;
+    }
+
+    .teacher-feedback strong {
+        color: #333;
+    }
+
+    .teacher-feedback p {
+        margin: 0.25rem 0 0 0;
+        color: #555;
+        line-height: 1.4;
+    }
+
+    .grade-meta {
+        margin-top: 0.5rem;
+    }
+
+    .grade-meta small {
+        color: #6c757d;
+        font-style: italic;
+    }
+
+    .btn-edit-grade {
+        background: #ffc107;
+        color: #212529;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        margin-top: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        transition: background 0.2s ease;
+    }
+
+    .btn-edit-grade:hover {
+        background: #e0a800;
+    }
+
+    .grade-form {
+        background: #fff3cd;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #ffc107;
+        text-align: center;
+    }
+
+    .grade-form h5 {
+        margin: 0 0 1rem 0;
+        color: #856404;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .btn-grade {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0 auto;
+        font-weight: 500;
+        transition: background 0.2s ease;
+    }
+
+    .btn-grade:hover {
+        background: #0056b3;
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .grading-modal {
+        background: white;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 500px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        color: #333;
+    }
+
+    .close-btn {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #6c757d;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .close-btn:hover {
+        color: #333;
+    }
+
+    .modal-content {
+        padding: 1.5rem;
+    }
+
+    .student-assignment-info {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+    }
+
+    .student-assignment-info h4 {
+        margin: 0 0 0.5rem 0;
+        color: #333;
+    }
+
+    .student-assignment-info p {
+        margin: 0 0 0.5rem 0;
+        color: #6c757d;
+    }
+
+    .max-points {
+        font-weight: 500;
+        color: #007bff;
+    }
+
+    .grade-input-section {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .input-group label {
+        font-weight: 500;
+        color: #333;
+    }
+
+    .input-group input,
+    .input-group select,
+    .input-group textarea {
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 1rem;
+    }
+
+    .input-group input:focus,
+    .input-group select:focus,
+    .input-group textarea:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    }
+
+    .input-suffix {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-top: 0.25rem;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        padding: 1.5rem;
+        border-top: 1px solid #e9ecef;
+    }
+
+    .btn-cancel,
+    .btn-save {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s ease;
+    }
+
+    .btn-cancel {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-cancel:hover {
+        background: #545b62;
+    }
+
+    .btn-save {
+        background: #28a745;
+        color: white;
+    }
+
+    .btn-save:hover:not(:disabled) {
+        background: #218838;
+    }
+
+    .btn-save:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+    }
+</style>
+
+@code {
+    private string searchQuery = "";
+    private string currentFilter = "all";
+    private bool isLoading = true;
+    private List<GradeViewModel> allSubmissions = new List<GradeViewModel>();
+    private List<GradeViewModel> filteredSubmissions = new List<GradeViewModel>();
+
+    // Grading modal state
+    private bool showGradingModal = false;
+    private bool isSavingGrade = false;
+    private GradeViewModel? currentGradingSubmission = null;
+    private GradeFormModel gradeForm = new GradeFormModel();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSubmissions();
+    }
+
+    private async Task LoadSubmissions()
+    {
+        try
+        {
+            isLoading = true;
+            allSubmissions = await GradeService.GetSubmissionsWithGradingStatusAsync();
+            ApplyFilter();
+            Console.WriteLine($"Loaded {allSubmissions.Count} submissions with grading status");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading submissions: {ex.Message}");
+            allSubmissions = new List<GradeViewModel>();
+            filteredSubmissions = new List<GradeViewModel>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void FilterSubmissions()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            ApplyFilter();
+            return;
+        }
+
+        var searchLower = searchQuery.ToLower();
+
+        filteredSubmissions = allSubmissions
+            .Where(s =>
+                s.StudentName.ToLower().Contains(searchLower) ||
+                s.AssignmentTitle.ToLower().Contains(searchLower) ||
+                s.AssignmentDescription.ToLower().Contains(searchLower) ||
+                s.Class.ToLower().Contains(searchLower))
+            .ToList();
+    }
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            if (currentFilter == "all")
+            {
+                filteredSubmissions = allSubmissions.ToList();
+            }
+            else
+            {
+                filteredSubmissions = allSubmissions
+                    .Where(s => s.Class == currentFilter)
+                    .ToList();
+            }
+        }
+        else
+        {
+            FilterSubmissions();
+        }
+    }
+
+    private async Task RefreshSubmissions()
+    {
+        await LoadSubmissions();
+        StateHasChanged();
+    }
+
+    private void GoBackToDashboard()
+    {
+        NavigationManager.NavigateTo("/teacher-dashboard");
+    }
+
+    private void HandleFilterChange(ChangeEventArgs e)
+    {
+        currentFilter = e.Value?.ToString() ?? "all";
+        ApplyFilter();
+    }
+
+    // Grading methods
+    private void StartGrading(GradeViewModel submission)
+    {
+        currentGradingSubmission = submission;
+        gradeForm = new GradeFormModel
+        {
+            MaxPoints = submission.AssignmentPoints,
+            NumericalGrade = null,
+            LetterGrade = "",
+            Feedback = ""
+        };
+        showGradingModal = true;
+    }
+
+    private void StartEditingGrade(GradeViewModel submission)
+    {
+        currentGradingSubmission = submission;
+        gradeForm = new GradeFormModel
+        {
+            MaxPoints = submission.MaxPoints,
+            NumericalGrade = submission.NumericalGrade,
+            LetterGrade = submission.LetterGrade,
+            Feedback = submission.Feedback
+        };
+        showGradingModal = true;
+    }
+
+    private void CancelGrading()
+    {
+        showGradingModal = false;
+        currentGradingSubmission = null;
+        gradeForm = new GradeFormModel();
+    }
+
+    private async Task SaveGrade()
+    {
+        if (currentGradingSubmission == null) return;
+
+        try
+        {
+            isSavingGrade = true;
+
+            // Store student name for logging before any async operations
+            var studentName = currentGradingSubmission.StudentName;
+
+            // Get current teacher ID from localStorage
+            var teacherId = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "currentTeacherId");
+            int? teacherIdInt = null;
+            if (!string.IsNullOrEmpty(teacherId) && int.TryParse(teacherId, out int id))
+            {
+                teacherIdInt = id;
+            }
+
+            var grade = new GradeModel
+            {
+                StudentId = currentGradingSubmission.StudentId,
+                AssignmentId = currentGradingSubmission.AssignmentId,
+                TeacherId = teacherIdInt,
+                NumericalGrade = gradeForm.NumericalGrade,
+                MaxPoints = gradeForm.MaxPoints,
+                LetterGrade = string.IsNullOrEmpty(gradeForm.LetterGrade) ? "" : gradeForm.LetterGrade,
+                Feedback = gradeForm.Feedback ?? ""
+            };
+
+            await GradeService.SaveGradeAsync(grade);
+
+            // Log success using the stored student name
+            Console.WriteLine($"Grade saved for student {studentName}");
+
+            // Refresh the submissions to show updated grading status
+            await LoadSubmissions();
+
+            // Close the modal
+            CancelGrading();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving grade: {ex.Message}");
+        }
+        finally
+        {
+            isSavingGrade = false;
+        }
+    }
+
+    // Helper class for the grading form
+    private class GradeFormModel
+    {
+        public decimal? NumericalGrade { get; set; }
+        public decimal MaxPoints { get; set; } = 100;
+        public string LetterGrade { get; set; } = "";
+        public string Feedback { get; set; } = "";
+    }
+}

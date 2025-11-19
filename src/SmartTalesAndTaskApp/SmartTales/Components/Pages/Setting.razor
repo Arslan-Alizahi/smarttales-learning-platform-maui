@@ -1,0 +1,238 @@
+﻿@page "/setting"
+@using SmartTales.Repository.IRepository
+@using SmartTales.Data
+
+<SmartTales.Components.Shared.Header Title="Setting" />
+
+<div class="settings-container has-bottom-nav">
+    <div class="settings-content">
+        <!-- Personal Settings Section -->
+        <div class="settings-section">
+            <h2>Personal Settings for @kid.FirstName</h2>
+            <div class="settings-card">
+                <div class="setting-item">
+                    <label>First Name</label>
+                    <input type="text" @bind="kid.FirstName" class="setting-input" />
+                </div>
+                <div class="setting-item">
+                    <label>Last Name</label>
+                    <input type="text" @bind="kid.LastName" class="setting-input" />
+                </div>
+                <div class="setting-item">
+                    <label>Email Address</label>
+                    <input type="email" @bind="kid.Email" class="setting-input" />
+                </div>
+                <div class="setting-item">
+                    <label>Phone Number</label>
+                    <input type="tel" @bind="kid.PhoneNumber" class="setting-input" />
+                </div>
+                <div class="setting-item">
+                    <label>Grade Level</label>
+                    <input type="text" @bind="kid.GradeLevel" class="setting-input" />
+                </div>
+                <div class="setting-item">
+                    <label>Password</label>
+                    <input type="password" @bind="password" class="setting-input" />
+                </div>
+                <button class="save-button" @onclick="SaveChanges">Save Changes</button>
+                @if (!string.IsNullOrEmpty(saveMessage))
+                {
+                    <div class="save-message">@saveMessage</div>
+                }
+            </div>
+        </div>
+
+        <!-- Dashboard Stats Section -->
+        
+
+        <!-- App Settings Section -->
+        <div class="settings-section">
+            <h2>App Settings</h2>
+            <div class="settings-card">
+                <div class="setting-item toggle-item">
+                    <div class="toggle-label">
+                        <span>Dark Mode</span>
+                        <p>Switch between light and dark theme</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item toggle-item">
+                    <div class="toggle-label">
+                        <span>Notifications</span>
+                        <p>Receive updates about your assignments</p>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" checked />
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logout Section -->
+        <div class="settings-section">
+            <div class="settings-card logout-card">
+                <button class="logout-button" @onclick="Logout">
+                    <span class="logout-icon">🚪</span>
+                    Logout
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<KidBottomNavBar CurrentPage="setting" />
+
+<style>
+    .settings-container.has-bottom-nav {
+        padding-bottom: 80px;
+        min-height: calc(100vh - 80px);
+    }
+</style>
+
+@code {
+    [Inject] IUserRepository UserRepository { get; set; } = null!;
+    [Inject] NavigationManager NavigationManager { get; set; } = null!;
+    [Inject] IJSRuntime JSRuntime { get; set; } = null!;
+
+    private User kid = new User();
+    private string password = "";
+    private int currentKidId = 0;
+    private string saveMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Get the currently logged-in kid's ID from localStorage
+            var storedKidId = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "currentKidId");
+
+            if (!string.IsNullOrEmpty(storedKidId) && int.TryParse(storedKidId, out int parsedId))
+            {
+                currentKidId = parsedId;
+                Console.WriteLine($"Using kid ID from localStorage: {currentKidId}");
+            }
+            else
+            {
+                // No kid ID in localStorage, redirect to login
+                Console.WriteLine("No kid ID found in localStorage, redirecting to login");
+                NavigationManager.NavigateTo("/kid-login");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error retrieving kid ID from localStorage: {ex.Message}");
+            NavigationManager.NavigateTo("/kid-login");
+            return;
+        }
+
+        await LoadKidData();
+    }
+
+    private async Task LoadKidData()
+    {
+        try
+        {
+            // Directly get the currently logged-in kid by ID
+            var userFromDb = await UserRepository.GetAsync(currentKidId);
+
+            if (userFromDb != null)
+            {
+                kid = userFromDb;
+
+                // Initialize metrics if they're null
+                kid.ProgressPercentage ??= 0;
+                kid.CompletedAssignments ??= 0;
+                kid.PendingAssignments ??= 0;
+                kid.TotalPoints ??= 0;
+
+                Console.WriteLine($"Loaded settings for current kid: {kid.FirstName} {kid.LastName} (ID: {kid.Id})");
+            }
+            else
+            {
+                // Kid not found, redirect to login
+                Console.WriteLine($"Current kid (ID: {currentKidId}) not found, redirecting to login");
+                await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "currentKidId");
+                NavigationManager.NavigateTo("/kid-login");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading kid data: {ex.Message}");
+            saveMessage = $"Error: {ex.Message}";
+        }
+    }
+
+    private async Task SaveChanges()
+    {
+        try
+        {
+            if (kid.Id > 0)
+            {
+                // Update existing user
+                await UserRepository.UpdateAsync(kid);
+                saveMessage = "Personal settings updated successfully";
+                Console.WriteLine($"Kid settings updated for ID: {kid.Id}");
+            }
+            else
+            {
+                // Create new user - this should rarely happen in a real app
+                kid.Role = "Kid";
+                if (!string.IsNullOrEmpty(password))
+                {
+                    kid.Password = BCrypt.Net.BCrypt.HashPassword(password);
+                }
+                await UserRepository.CreateAsync(kid);
+                currentKidId = kid.Id;
+                saveMessage = "New profile created successfully";
+                Console.WriteLine($"New kid created with ID: {kid.Id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving kid data: {ex.Message}");
+            saveMessage = $"Error: {ex.Message}";
+        }
+    }
+
+    private async Task SaveDashboardStats()
+    {
+        try
+        {
+            if (kid.Id > 0)
+            {
+                await UserRepository.UpdateKidDashboardMetricsAsync(
+                    kid.Id,
+                    kid.ProgressPercentage,
+                    kid.CompletedAssignments,
+                    kid.PendingAssignments,
+                    kid.TotalPoints
+                );
+
+                saveMessage = "Dashboard stats updated successfully";
+                Console.WriteLine($"Updated dashboard stats for kid ID: {kid.Id}");
+            }
+            else
+            {
+                saveMessage = "Please save personal settings first";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating dashboard stats: {ex.Message}");
+            saveMessage = $"Error: {ex.Message}";
+        }
+    }
+
+    private async Task Logout()
+    {
+        // Clear the kid ID from localStorage
+        await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "currentKidId");
+        NavigationManager.NavigateTo("/");
+    }
+}

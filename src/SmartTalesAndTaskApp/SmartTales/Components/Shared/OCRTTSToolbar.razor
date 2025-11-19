@@ -1,0 +1,150 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using SmartTales.Service
+@inject OCRService OCRService
+@inject TTSService TTSService
+@inject IJSRuntime JSRuntime
+
+<div class="ocr-tts-toolbar">
+    <div class="tool-header">
+        <h3>Smart Tools</h3>
+    </div>
+    <div class="tool-buttons">
+        <InputFile id="imageFileInput" OnChange="OnImageSelected" style="display:none;" accept="image/*" />
+        <button class="tool-button" @onclick="TriggerImageFileInput">
+            <i class="bi bi-file-earmark-image"></i>
+            <span>OCR: Read Image Text</span>
+        </button>
+        <button class="tool-button" @onclick="SpeakSelectedText" disabled="@string.IsNullOrEmpty(extractedText)">
+            <i class="bi bi-volume-up"></i>
+            <span>Read Text Aloud</span>
+        </button>
+    </div>
+    @if (!string.IsNullOrEmpty(extractedText))
+    {
+        <div class="extracted-text-container">
+            <h4>Extracted Text</h4>
+            <div class="extracted-text">@extractedText</div>
+            <div class="button-row">
+                <button class="action-button" @onclick="ClearExtractedText">
+                    <i class="bi bi-x-circle"></i>
+                    <span>Clear</span>
+                </button>
+                @if (!isPlayingAudio)
+                {
+                    <button class="action-button" @onclick="SpeakSelectedText">
+                        <i class="bi bi-volume-up"></i>
+                        <span>Read Aloud</span>
+                    </button>
+                }
+                else
+                {
+                    <button class="action-button" @onclick="StopAudio">
+                        <i class="bi bi-stop-circle"></i>
+                        <span>Stop Audio</span>
+                    </button>
+                }
+            </div>
+        </div>
+    }
+    @if (isProcessingImage)
+    {
+        <div class="processing-indicator">
+            <div class="spinner"></div>
+            <span>Processing image...</span>
+        </div>
+    }
+</div>
+
+@code {
+    private string extractedText = "";
+    private bool isProcessingImage = false;
+    private bool isPlayingAudio = false;
+    
+    private async Task TriggerImageFileInput()
+    {
+        await JSRuntime.InvokeVoidAsync("triggerFileInput", "imageFileInput");
+    }
+    
+    private async Task OnImageSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            isProcessingImage = true;
+            StateHasChanged();
+            
+            var file = e.File;
+            if (file != null)
+            {
+                var imageStream = file.OpenReadStream(maxAllowedSize: 10485760); // 10MB max
+                
+                // Call OCR service to extract text
+                extractedText = await OCRService.ExtractTextFromImage(imageStream, file.Name);
+                
+                Console.WriteLine($"Extracted text: {(extractedText.Length > 50 ? extractedText.Substring(0, 50) + "..." : extractedText)}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error processing image: {ex.Message}");
+            extractedText = $"Error processing image: {ex.Message}";
+        }
+        finally
+        {
+            isProcessingImage = false;
+            StateHasChanged();
+        }
+    }
+    
+    private void ClearExtractedText()
+    {
+        extractedText = "";
+        StateHasChanged();
+    }
+    
+    private async Task SpeakSelectedText()
+    {
+        if (string.IsNullOrEmpty(extractedText) || isPlayingAudio)
+            return;
+        
+        try
+        {
+            isPlayingAudio = true;
+            StateHasChanged();
+            
+            // Get audio data from TTS service
+            var audioData = await TTSService.SynthesizeText(extractedText);
+            
+            // Convert to base64 for playing in browser
+            var base64Audio = Convert.ToBase64String(audioData);
+            
+            // Play audio using JavaScript
+            await JSRuntime.InvokeVoidAsync("playAudio", base64Audio);
+            
+            // Wait for audio to finish
+            await JSRuntime.InvokeVoidAsync("audioFinishedCallback");
+            
+            isPlayingAudio = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error playing audio: {ex.Message}");
+            isPlayingAudio = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task StopAudio()
+    {
+        await JSRuntime.InvokeVoidAsync("stopAudio");
+        isPlayingAudio = false;
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("setupAudioCallbacks");
+        }
+    }
+}

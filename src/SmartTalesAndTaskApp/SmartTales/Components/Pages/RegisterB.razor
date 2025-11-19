@@ -1,0 +1,282 @@
+﻿@page "/register"
+@inject IUserRepository _userRepository
+@inject NavigationManager Navigation
+@inject IJSRuntime _JS
+<SmartTales.Components.Shared.Header Title="" />
+
+<div class="card shadow border-0 mb-4 Register-CARD">
+    <div class="card-body p-4 Register-CARD-BODY">
+        <div class="border p-3 mt-4">
+            <!-- Role Selection -->
+            <div class="role-selection text-center mb-4">
+                <button class="btn Role-BUTTON @(SelectedRole == 1 ? "active" : "")" @onclick="() => SelectRole(1)">
+                    Kid
+                </button>
+                <button class="btn Role-BUTTON @(SelectedRole == 2 ? "active" : "")" @onclick="() => SelectRole(2)">
+                    Parent
+                </button>
+                <button class="btn Role-BUTTON @(SelectedRole == 3 ? "active" : "")" @onclick="() => SelectRole(3)">
+                    Teacher
+                </button>
+            </div>
+
+            <!-- Common Registration Form -->
+            <EditForm Model="User" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <h4 class="text-center">@(SelectedRole switch { 1 => "Kid", 2 => "Parent", 3 => "Teacher", _ => "Kid" }) Details</h4>
+                
+                <!-- First Name -->
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="User.FirstName" 
+                             @oninput="ValidateFirstName"
+                             class=@($"form-control {(IsFirstNameValid ? "" : "is-invalid")}")
+                             placeholder="First Name" required />
+                    <label>First Name</label>
+                    @if (!IsFirstNameValid && !string.IsNullOrEmpty(User.FirstName))
+                    {
+                        <div class="invalid-feedback">
+                            First name should only contain letters
+                        </div>
+                    }
+                </div>
+
+                <!-- Last Name -->
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="User.LastName" 
+                             @oninput="ValidateLastName"
+                             class=@($"form-control {(IsLastNameValid ? "" : "is-invalid")}")
+                             placeholder="Last Name" required />
+                    <label>Last Name</label>
+                    @if (!IsLastNameValid && !string.IsNullOrEmpty(User.LastName))
+                    {
+                        <div class="invalid-feedback">
+                            Last name should only contain letters
+                        </div>
+                    }
+                </div>
+
+                <!-- Email -->
+                <div class="form-floating mb-3">
+                    <InputText class="form-control" @bind-Value="User.Email" type="email" placeholder="Email" required />
+                    <label>Email</label>
+                </div>
+
+                @if (SelectedRole == 1)
+                {
+                    <!-- Kid-specific fields -->
+                    <div class="form-floating mb-3">
+                        <InputText class="form-control" @bind-Value="User.GradeLevel" placeholder="Grade Level" required />
+                        <label>Grade Level</label>
+                    </div>
+                }
+                else if (SelectedRole == 2)
+                {
+                    <!-- Parent-specific fields -->
+                    <div class="form-floating mb-3">
+                        <InputText class="form-control" @bind-Value="User.Address" placeholder="Home Address" required />
+                        <label>Home Address</label>
+                    </div>
+                }
+                else if (SelectedRole == 3)
+                {
+                    <!-- Teacher-specific fields -->
+                    <div class="form-floating mb-3">
+                        <InputText class="form-control" @bind-Value="User.Specialization" placeholder="Specialization" required />
+                        <label>Specialization</label>
+                    </div>
+                    <div class="form-floating mb-3">
+                        <InputNumber class="form-control" @bind-Value="User.YearsOfExperience" placeholder="Years of Experience" required />
+                        <label>Years of Experience</label>
+                    </div>
+                }
+
+                <!-- Password -->
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="User.Password" 
+                             @oninput="ValidatePassword"
+                             class=@($"form-control {(IsPasswordValid ? "" : "is-invalid")}")
+                             type="password" 
+                             placeholder="Password" required />
+                    <label>Password</label>
+                    @if (!string.IsNullOrEmpty(User.Password))
+                    {
+                        <div class=@($"password-requirements {(IsPasswordValid ? "text-success" : "text-danger")}")>
+                            <small>Password must contain:</small>
+                            <ul class="mb-0">
+                                <li class=@(HasUpperCase ? "text-success" : "text-danger")>
+                                    <i class=@($"bi {(HasUpperCase ? "bi-check" : "bi-x")}")></i> One uppercase letter
+                                </li>
+                                <li class=@(HasNumber ? "text-success" : "text-danger")>
+                                    <i class=@($"bi {(HasNumber ? "bi-check" : "bi-x")}")></i> One number
+                                </li>
+                                <li class=@(HasSpecialChar ? "text-success" : "text-danger")>
+                                    <i class=@($"bi {(HasSpecialChar ? "bi-check" : "bi-x")}")></i> One special character
+                                </li>
+                                <li class=@(HasMinLength ? "text-success" : "text-danger")>
+                                    <i class=@($"bi {(HasMinLength ? "bi-check" : "bi-x")}")></i> Minimum 8 characters
+                                </li>
+                            </ul>
+                        </div>
+                    }
+                </div>
+
+                <!-- Confirm Password -->
+                <div class="form-floating mb-3">
+                    <InputText @bind-Value="ConfirmPassword" 
+                             @oninput="ValidateConfirmPassword"
+                             class=@($"form-control {(IsConfirmPasswordValid ? "" : "is-invalid")}")
+                             type="password" 
+                             placeholder="Confirm Password" required />
+                    <label>Confirm Password</label>
+                    @if (!IsConfirmPasswordValid && !string.IsNullOrEmpty(ConfirmPassword))
+                    {
+                        <div class="invalid-feedback">
+                            Passwords do not match
+                        </div>
+                    }
+                </div>
+
+                <button class="btn btn-primary" type="submit" disabled="@(!IsFormValid)">Register</button>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+<style>
+    .password-requirements {
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .password-requirements ul {
+        list-style: none;
+        padding-left: 0;
+        margin-top: 0.25rem;
+    }
+
+    .password-requirements li {
+        margin-bottom: 0.25rem;
+    }
+
+    .password-requirements i {
+        margin-right: 0.5rem;
+    }
+</style>
+
+@code {
+    private int SelectedRole { get; set; } = 1;
+    private User User { get; set; } = new();
+    private string ConfirmPassword { get; set; } = string.Empty;
+
+    // Validation flags
+    private bool IsFirstNameValid { get; set; } = true;
+    private bool IsLastNameValid { get; set; } = true;
+    private bool IsPasswordValid { get; set; } = false;
+    private bool IsConfirmPasswordValid { get; set; } = true;
+
+    // Password requirement flags
+    private bool HasUpperCase { get; set; }
+    private bool HasNumber { get; set; }
+    private bool HasSpecialChar { get; set; }
+    private bool HasMinLength { get; set; }
+
+    private bool IsFormValid => 
+        IsFirstNameValid && 
+        IsLastNameValid && 
+        IsPasswordValid && 
+        IsConfirmPasswordValid && 
+        !string.IsNullOrEmpty(User.FirstName) &&
+        !string.IsNullOrEmpty(User.LastName) &&
+        !string.IsNullOrEmpty(User.Email) &&
+        !string.IsNullOrEmpty(User.Password) &&
+        !string.IsNullOrEmpty(ConfirmPassword);
+
+    private void SelectRole(int role)
+    {
+        SelectedRole = role;
+        User = new User();
+        ConfirmPassword = string.Empty;
+        ResetValidation();
+    }
+
+    private void ResetValidation()
+    {
+        IsFirstNameValid = true;
+        IsLastNameValid = true;
+        IsPasswordValid = false;
+        IsConfirmPasswordValid = true;
+        HasUpperCase = false;
+        HasNumber = false;
+        HasSpecialChar = false;
+        HasMinLength = false;
+    }
+
+    private void ValidateFirstName(ChangeEventArgs e)
+    {
+        string value = e.Value?.ToString() ?? "";
+        User.FirstName = value;
+        IsFirstNameValid = string.IsNullOrEmpty(value) || value.All(char.IsLetter);
+    }
+
+    private void ValidateLastName(ChangeEventArgs e)
+    {
+        string value = e.Value?.ToString() ?? "";
+        User.LastName = value;
+        IsLastNameValid = string.IsNullOrEmpty(value) || value.All(char.IsLetter);
+    }
+
+    private void ValidatePassword(ChangeEventArgs e)
+    {
+        string value = e.Value?.ToString() ?? "";
+        User.Password = value;
+
+        HasUpperCase = value.Any(char.IsUpper);
+        HasNumber = value.Any(char.IsDigit);
+        HasSpecialChar = value.Any(c => !char.IsLetterOrDigit(c));
+        HasMinLength = value.Length >= 8;
+
+        IsPasswordValid = HasUpperCase && HasNumber && HasSpecialChar && HasMinLength;
+        ValidateConfirmPassword(new ChangeEventArgs { Value = ConfirmPassword });
+    }
+
+    private void ValidateConfirmPassword(ChangeEventArgs e)
+    {
+        string value = e.Value?.ToString() ?? "";
+        ConfirmPassword = value;
+        IsConfirmPasswordValid = string.IsNullOrEmpty(value) || value == User.Password;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (!IsFormValid)
+        {
+            await _JS.ToastrError("Please fix the validation errors before submitting.");
+            return;
+        }
+
+        User.Role = SelectedRole switch
+        {
+            1 => "Kid",
+            2 => "Parent",
+            3 => "Teacher",
+            _ => "Kid" // Default case
+        };
+
+        try
+        {
+            // Hash the password before saving to database
+            string plainPassword = User.Password;
+            User.Password = BCrypt.Net.BCrypt.HashPassword(plainPassword);
+            
+            await _userRepository.CreateAsync(User);
+            await _JS.ToastrSuccess("User Registered Successfully.");
+            Navigation.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Registration failed: {ex.Message}");
+        }
+    }
+}

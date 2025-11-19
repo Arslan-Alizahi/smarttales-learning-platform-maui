@@ -1,0 +1,113 @@
+<div class="notifications-popup">
+    <div class="notifications-header">
+        <h3>Notifications</h3>
+        <button class="mark-all-read" @onclick="MarkAllAsRead">
+            <i class="bi bi-check-all"></i> Mark all as read
+        </button>
+    </div>
+    
+    <div class="notifications-list">
+        @foreach (var notification in notifications)
+        {
+            <div class="notification-item @(notification.IsRead ? "read" : "")">
+                <div class="notification-icon">
+                    @switch (notification.Type)
+                    {
+                        case "assignment":
+                            <i class="bi bi-file-earmark-text"></i>
+                            break;
+                        case "reminder":
+                            <i class="bi bi-alarm"></i>
+                            break;
+                        case "message":
+                            <i class="bi bi-chat-dots"></i>
+                            break;
+                        default:
+                            <i class="bi bi-bell"></i>
+                            break;
+                    }
+                </div>
+                <div class="notification-content">
+                    <div class="notification-title">@notification.Title</div>
+                    <div class="notification-message">@notification.Message</div>
+                    <div class="notification-time">@notification.Time</div>
+                </div>
+                <button class="notification-action" @onclick="() => MarkAsRead(notification.Id)">
+                    <i class="bi bi-check"></i>
+                </button>
+            </div>
+        }
+    </div>
+    
+    @if (!notifications.Any())
+    {
+        <div class="no-notifications">
+            <i class="bi bi-bell-slash"></i>
+            <p>No new notifications</p>
+        </div>
+    }
+    
+    <div class="notifications-footer">
+        <button class="view-all">View All Notifications</button>
+    </div>
+</div>
+
+@code {
+    private List<NotificationItem> notifications = new List<NotificationItem>
+    {
+        new NotificationItem
+        {
+            Id = 1,
+            Title = "New Assignment Submission",
+            Message = "John Smith submitted Math Assignment 3",
+            Time = "2 hours ago",
+            Type = "assignment",
+            IsRead = false
+        },
+        new NotificationItem
+        {
+            Id = 2,
+            Title = "Deadline Reminder",
+            Message = "Physics Quiz is due tomorrow",
+            Time = "3 hours ago",
+            Type = "reminder",
+            IsRead = false
+        },
+        new NotificationItem
+        {
+            Id = 3,
+            Title = "New Message",
+            Message = "Emily Johnson has a question about the homework",
+            Time = "5 hours ago",
+            Type = "message",
+            IsRead = true
+        }
+    };
+    
+    private void MarkAsRead(int id)
+    {
+        var notification = notifications.FirstOrDefault(n => n.Id == id);
+        if (notification != null)
+        {
+            notification.IsRead = true;
+        }
+    }
+    
+    private void MarkAllAsRead()
+    {
+        foreach (var notification in notifications)
+        {
+            notification.IsRead = true;
+        }
+    }
+    
+    private class NotificationItem
+    {
+        public int Id { get; set; }
+        public string Title { get; set; }
+        public string Message { get; set; }
+        public string Time { get; set; }
+        public string Type { get; set; }
+        public bool IsRead { get; set; }
+    }
+} 

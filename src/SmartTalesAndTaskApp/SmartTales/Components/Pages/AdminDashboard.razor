@@ -1,0 +1,353 @@
+@page "/admin-dashboard"
+@using SmartTales.Model
+@using SmartTales.Service
+@using SmartTales.Data
+@using SmartTales.Components.Pages
+@inject AdminService _adminService
+@inject PasswordResetService _passwordResetService
+@inject NavigationManager Navigation
+@inject IJSRuntime _JS
+
+<div class="admin-dashboard-container">
+    <!-- Admin Header -->
+    <div class="admin-header">
+        <div class="admin-header-left">
+            <div class="admin-logo">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <div class="admin-title">
+                <h1>Admin Dashboard</h1>
+                <p>Welcome back, @currentAdmin?.FirstName</p>
+            </div>
+        </div>
+        <div class="admin-header-right">
+            <div class="admin-user-info">
+                <div class="admin-avatar">
+                    <i class="fas fa-user-shield"></i>
+                </div>
+                <div class="admin-details">
+                    <span class="admin-name">@currentAdmin?.FullName</span>
+                    <span class="admin-role">@currentAdmin?.DisplayRole</span>
+                </div>
+            </div>
+            <button class="btn-logout" @onclick="HandleLogout">
+                <i class="fas fa-sign-out-alt"></i>
+                Logout
+            </button>
+        </div>
+    </div>
+
+    <!-- Admin Navigation -->
+    <div class="admin-navigation">
+        <div class="nav-item @(CurrentPage == "dashboard" ? "active" : "")" @onclick='() => NavigateToPage("dashboard")'>
+            <i class="fas fa-tachometer-alt"></i>
+            <span>Dashboard</span>
+        </div>
+        <div class="nav-item @(CurrentPage == "users" ? "active" : "")" @onclick='() => NavigateToPage("users")'>
+            <i class="fas fa-users"></i>
+            <span>User Management</span>
+        </div>
+        <div class="nav-item @(CurrentPage == "relationships" ? "active" : "")" @onclick='() => NavigateToPage("relationships")'>
+            <i class="fas fa-link"></i>
+            <span>Relationships</span>
+        </div>
+        <div class="nav-item @(CurrentPage == "assignments" ? "active" : "")" @onclick='() => NavigateToPage("assignments")'>
+            <i class="fas fa-tasks"></i>
+            <span>Assignments</span>
+        </div>
+        <div class="nav-item @(CurrentPage == "notifications" ? "active" : "")" @onclick='() => NavigateToPage("notifications")'>
+            <i class="fas fa-bell"></i>
+            <span>Notifications</span>
+            @if (pendingPasswordResets > 0)
+            {
+                <span class="notification-badge">@pendingPasswordResets</span>
+            }
+        </div>
+        <div class="nav-item @(CurrentPage == "audit" ? "active" : "")" @onclick='() => NavigateToPage("audit")'>
+            <i class="fas fa-history"></i>
+            <span>Audit Logs</span>
+        </div>
+        <div class="nav-item @(CurrentPage == "settings" ? "active" : "")" @onclick='() => NavigateToPage("settings")'>
+            <i class="fas fa-cog"></i>
+            <span>Settings</span>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="admin-main-content">
+        @if (CurrentPage == "dashboard")
+        {
+            <!-- Dashboard Overview -->
+            <div class="dashboard-overview">
+                <h2>System Overview</h2>
+                
+                <!-- Statistics Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card users">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number">@totalUsers</div>
+                            <div class="stat-label">Total Users</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card kids">
+                        <div class="stat-icon">
+                            <i class="fas fa-child"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number">@(userStats.ContainsKey("Kid") ? userStats["Kid"] : 0)</div>
+                            <div class="stat-label">Kids</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card parents">
+                        <div class="stat-icon">
+                            <i class="fas fa-user-friends"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number">@(userStats.ContainsKey("Parent") ? userStats["Parent"] : 0)</div>
+                            <div class="stat-label">Parents</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card teachers">
+                        <div class="stat-icon">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-number">@(userStats.ContainsKey("Teacher") ? userStats["Teacher"] : 0)</div>
+                            <div class="stat-label">Teachers</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="recent-activity-section">
+                    <div class="section-header">
+                        <h3>Recent Activity</h3>
+                        <button class="btn-view-all" @onclick='() => NavigateToPage("audit")'>
+                            View All
+                        </button>
+                    </div>
+                    
+                    <div class="activity-list">
+                        @if (recentActions.Any())
+                        {
+                            @foreach (var action in recentActions.Take(5))
+                            {
+                                <div class="activity-item">
+                                    <div class="activity-icon">
+                                        <i class="fas @GetActionIcon(action.Action)"></i>
+                                    </div>
+                                    <div class="activity-content">
+                                        <div class="activity-description">@action.ActionDescription</div>
+                                        <div class="activity-time">@action.Timestamp.ToString("MMM dd, yyyy HH:mm")</div>
+                                    </div>
+                                    <div class="activity-status @(action.Success ? "success" : "error")">
+                                        <i class="fas @(action.Success ? "fa-check" : "fa-times")"></i>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="no-activity">
+                                <i class="fas fa-info-circle"></i>
+                                <span>No recent activity</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Recent Users -->
+                <div class="recent-users-section">
+                    <div class="section-header">
+                        <h3>Recently Registered Users</h3>
+                        <button class="btn-view-all" @onclick='() => NavigateToPage("users")'>
+                            View All
+                        </button>
+                    </div>
+                    
+                    <div class="users-list">
+                        @if (recentUsers.Any())
+                        {
+                            @foreach (var user in recentUsers.Take(5))
+                            {
+                                <div class="user-item">
+                                    <div class="user-avatar">
+                                        <i class="fas @GetUserRoleIcon(user.Role)"></i>
+                                    </div>
+                                    <div class="user-info">
+                                        <div class="user-name">@user.FirstName @user.LastName</div>
+                                        <div class="user-email">@user.Email</div>
+                                    </div>
+                                    <div class="user-role @user.Role.ToLower()">
+                                        @user.Role
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="no-users">
+                                <i class="fas fa-info-circle"></i>
+                                <span>No recent users</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        else if (CurrentPage == "users")
+        {
+            <AdminUserManagement />
+        }
+        else if (CurrentPage == "relationships")
+        {
+            <AdminRelationshipManagement />
+        }
+        else if (CurrentPage == "notifications")
+        {
+            <AdminNotificationCenter />
+        }
+        else if (CurrentPage == "assignments")
+        {
+            <div class="page-placeholder">
+                <i class="fas fa-tasks"></i>
+                <h3>Assignment Management</h3>
+                <p>Assignment management is temporarily disabled for build.</p>
+            </div>
+        }
+        else if (CurrentPage == "audit")
+        {
+            <div class="page-placeholder">
+                <i class="fas fa-history"></i>
+                <h3>Audit Logs</h3>
+                <p>Audit log viewer will be implemented here.</p>
+            </div>
+        }
+        else if (CurrentPage == "settings")
+        {
+            <div class="page-placeholder">
+                <i class="fas fa-cog"></i>
+                <h3>System Settings</h3>
+                <p>System configuration panel will be implemented here.</p>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private AdminUserModel? currentAdmin;
+    private int currentAdminId;
+    private string CurrentPage { get; set; } = "dashboard";
+    
+    private int totalUsers = 0;
+    private Dictionary<string, int> userStats = new();
+    private List<AdminAuditLogModel> recentActions = new();
+    private List<User> recentUsers = new();
+    private int pendingPasswordResets = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var storedAdminId = await _JS.InvokeAsync<string>("localStorage.getItem", "currentAdminId");
+
+            if (string.IsNullOrEmpty(storedAdminId) || !int.TryParse(storedAdminId, out currentAdminId))
+            {
+                Navigation.NavigateTo("/admin-login");
+                return;
+            }
+
+            await LoadAdminData();
+            await LoadDashboardData();
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading dashboard: {ex.Message}");
+            Navigation.NavigateTo("/admin-login");
+        }
+    }
+
+    private async Task LoadAdminData()
+    {
+        // For now, we'll create a placeholder admin since we don't have GetAdminAsync in service yet
+        currentAdmin = new AdminUserModel
+        {
+            Id = currentAdminId,
+            FirstName = "System",
+            LastName = "Administrator",
+            Username = "admin",
+            Email = "admin@smarttales.com",
+            Role = "SuperAdmin"
+        };
+    }
+
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            userStats = await _adminService.GetUserStatsByRoleAsync(currentAdminId);
+            totalUsers = userStats.Values.Sum();
+            recentActions = (await _adminService.GetRecentAdminActionsAsync(10, currentAdminId)).ToList();
+            recentUsers = (await _adminService.GetRecentlyRegisteredUsersAsync(10, currentAdminId)).ToList();
+            pendingPasswordResets = await _passwordResetService.GetPendingRequestCountAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard data: {ex.Message}");
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        try
+        {
+            await _adminService.LogoutAsync(currentAdminId);
+            await _JS.InvokeVoidAsync("localStorage.clear");
+            await _JS.ToastrSuccess("Logged out successfully!");
+            Navigation.NavigateTo("/admin-login");
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error during logout: {ex.Message}");
+        }
+    }
+
+    private void NavigateToPage(string page)
+    {
+        CurrentPage = page;
+        StateHasChanged();
+    }
+
+    private string GetActionIcon(string action)
+    {
+        return action switch
+        {
+            "LOGIN" => "fa-sign-in-alt",
+            "LOGOUT" => "fa-sign-out-alt",
+            "CREATE_USER" => "fa-user-plus",
+            "UPDATE_USER" => "fa-user-edit",
+            "DELETE_USER" => "fa-user-minus",
+            "RESET_PASSWORD" => "fa-key",
+            "ACTIVATE_USER" => "fa-user-check",
+            "DEACTIVATE_USER" => "fa-user-times",
+            _ => "fa-cog"
+        };
+    }
+
+    private string GetUserRoleIcon(string role)
+    {
+        return role switch
+        {
+            "Kid" => "fa-child",
+            "Parent" => "fa-user-friends",
+            "Teacher" => "fa-chalkboard-teacher",
+            _ => "fa-user"
+        };
+    }
+}

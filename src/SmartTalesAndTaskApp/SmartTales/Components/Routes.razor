@@ -1,0 +1,16 @@
+﻿<Router AppAssembly="@typeof(MauiProgram).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <PageTitle>Not found</PageTitle>
+        <LayoutView Layout="@typeof(Layout.MainLayout)">
+            <div class="d-flex flex-column align-items-center justify-content-center" style="height: 100vh">
+                <h1 class="mb-4">Oops!</h1>
+                <p class="text-center mb-4">Sorry, we couldn't find the page you're looking for.</p>
+                <a href="/" class="btn btn-primary px-4 py-2">Go Home</a>
+            </div>
+        </LayoutView>
+    </NotFound>
+</Router>

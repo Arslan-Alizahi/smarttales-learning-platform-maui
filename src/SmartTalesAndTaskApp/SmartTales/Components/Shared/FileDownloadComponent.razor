@@ -1,0 +1,163 @@
+@using SmartTales.Service
+@inject FileStorageService FileStorageService
+@inject IJSRuntime JSRuntime
+
+<div class="file-download-component">
+    @if (Files != null && Files.Any())
+    {
+        <div class="files-section">
+            <h4>Attachments</h4>
+            <div class="files-list">
+                @foreach (var file in Files)
+                {
+                    <div class="file-item">
+                        <div class="file-info">
+                            <i class="bi bi-file-earmark"></i>
+                            <span class="file-name">@FileStorageService.GetOriginalFileName(file)</span>
+                            @if (FileStorageService.FileExists(file))
+                            {
+                                <span class="file-status available">Available</span>
+                            }
+                            else
+                            {
+                                <span class="file-status unavailable">File not found</span>
+                            }
+                        </div>
+                        <div class="file-actions">
+                            @if (FileStorageService.FileExists(file))
+                            {
+                                <button class="btn-download" @onclick="() => DownloadFile(file)">
+                                    <i class="bi bi-download"></i> Download
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="no-files">
+            <i class="bi bi-file-earmark-x"></i>
+            <p>No attachments available</p>
+        </div>
+    }
+</div>
+
+<style>
+    .file-download-component {
+        margin: 1rem 0;
+    }
+
+    .files-section h4 {
+        margin-bottom: 0.5rem;
+        color: #333;
+        font-size: 1.1rem;
+    }
+
+    .files-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .file-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+    }
+
+    .file-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex: 1;
+    }
+
+    .file-info i {
+        color: #6c757d;
+        font-size: 1.2rem;
+    }
+
+    .file-name {
+        font-weight: 500;
+        color: #333;
+    }
+
+    .file-status {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+
+    .file-status.available {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .file-status.unavailable {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .btn-download {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.9rem;
+    }
+
+    .btn-download:hover {
+        background: #0056b3;
+    }
+
+    .no-files {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+    }
+
+    .no-files i {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+</style>
+
+@code {
+    [Parameter] public List<string> Files { get; set; } = new List<string>();
+
+    private async Task DownloadFile(string filePath)
+    {
+        try
+        {
+            var fileBytes = await FileStorageService.ReadFileAsync(filePath);
+            if (fileBytes != null)
+            {
+                var fileName = FileStorageService.GetOriginalFileName(filePath);
+                await JSRuntime.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(fileBytes));
+                Console.WriteLine($"File downloaded: {fileName}");
+            }
+            else
+            {
+                await JSRuntime.ToastrError("File not found or could not be read.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error downloading file {filePath}: {ex.Message}");
+            await JSRuntime.ToastrError($"Error downloading file: {ex.Message}");
+        }
+    }
+}

@@ -1,0 +1,399 @@
+@page "/upload-assignment"
+@using SmartTales.Service
+@using SmartTales.Model
+@using SmartTales.Repository.IRepository
+@using Microsoft.AspNetCore.Components.Forms
+@inject AssignmentService AssignmentService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IUserRepository UserRepository
+@inject FileStorageService FileStorageService
+@implements IDisposable
+
+<div class="upload-container">
+    <div class="header">
+        <h1>Upload Assignment</h1>
+        <div class="notification-icon" @onclick="ToggleNotifications">
+            <i class="bi bi-bell-fill"></i>
+            <span class="notification-badge">3</span>
+        </div>
+    </div>
+
+    @if (showNotifications)
+    {
+        <NotificationsPopup />
+    }
+
+    <div class="form-container">
+        <div class="form-section">
+            <div class="form-group">
+                <label for="assignmentTitle">Assignment Title</label>
+                <input type="text" id="assignmentTitle" @bind="assignmentTitle" placeholder="Enter assignment title" />
+                @if (!string.IsNullOrEmpty(titleError))
+                {
+                    <div class="error-message">@titleError</div>
+                }
+            </div>
+            
+            <div class="form-group">
+                <label for="classSelect">Select Class</label>
+                <select id="classSelect" @bind="selectedClass">
+                    <option value="">Select a class</option>
+                    <option value="Class 10A">Class 10A</option>
+                    <option value="Class 10B">Class 10B</option>
+                    <option value="Class 11A">Class 11A</option>
+                    <option value="Class 11B">Class 11B</option>
+                    <option value="Class 12A">Class 12A</option>
+                    <option value="Class 12B">Class 12B</option>
+                </select>
+                @if (!string.IsNullOrEmpty(classError))
+                {
+                    <div class="error-message">@classError</div>
+                }
+            </div>
+            
+            <div class="form-group">
+                <label for="dueDate">Due Date</label>
+                <input type="date" id="dueDate" @bind="dueDate" />
+            </div>
+            
+            <div class="form-group">
+                <label for="assignmentDescription">Assignment Description</label>
+                <textarea id="assignmentDescription" @bind="description" rows="4" placeholder="Enter detailed instructions for the assignment"></textarea>
+                @if (!string.IsNullOrEmpty(descriptionError))
+                {
+                    <div class="error-message">@descriptionError</div>
+                }
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <div class="form-group">
+                <label>Assignment Type</label>
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="typeIndividual" name="assignmentType" value="individual" checked @onchange="@(() => assignmentType = "individual")" />
+                        <label for="typeIndividual">Individual</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="typeGroup" name="assignmentType" value="group" @onchange="@(() => assignmentType = "group")" />
+                        <label for="typeGroup">Group</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Points</label>
+                <div class="points-slider">
+                    <input type="range" min="0" max="100" @bind="points" class="slider" id="pointsRange" />
+                    <div class="points-display">@points points</div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Attachments</label>
+                <InputFile id="fileInput" OnChange="OnFileChange" style="display:none;" multiple />
+                <div class="file-upload-area" @onclick="TriggerFileInput" @ondragover="PreventDefault" @ondrop="PreventDefault" @ondragenter="PreventDefault">
+                    <i class="bi bi-cloud-upload"></i>
+                    <p>Drag and drop files here or click to browse</p>
+                    <span class="file-types">Supported formats: PDF, DOC, DOCX, PPT, PPTX, ZIP</span>
+                </div>
+                
+                @if (uploadedFiles.Any())
+                {
+                    <div class="uploaded-files">
+                        @foreach (var file in uploadedFiles)
+                        {
+                            <div class="file-item">
+                                <i class="bi bi-file-earmark"></i>
+                                <span class="file-name">@FileStorageService.GetOriginalFileName(file)</span>
+                                <button class="remove-file" @onclick="() => RemoveFile(file)">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    
+    <div class="action-buttons">
+        <button class="btn-cancel" @onclick="Cancel">Cancel</button>
+        <button class="btn-save" @onclick="SaveDraft">Save as Draft</button>
+        <button class="btn-publish" @onclick="PublishAssignment">Publish</button>
+    </div>
+
+    @if (showSuccessMessage)
+    {
+        <div class="success-message">
+            <div class="success-content">
+                <i class="bi bi-check-circle-fill"></i>
+                <p>Assignment @(isPublished ? "published" : "saved") successfully!</p>
+                <div class="success-buttons">
+                    <button class="btn-dashboard" @onclick="GoToDashboard">Go to Dashboard</button>
+                    @if (isPublished)
+                    {
+                        <button class="btn-view-assignments" @onclick="ViewAssignments">View Assignments</button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<BottomNavBar CurrentPage="upload-assignment" />
+
+@code {
+    private bool showNotifications = false;
+    private string assignmentTitle = "";
+    private string selectedClass = "";
+    private DateTime dueDate = DateTime.Now.AddDays(7);
+    private string description = "";
+    private string assignmentType = "individual";
+    private int points = 50;
+    private List<string> uploadedFiles = new List<string>();
+    private bool showSuccessMessage = false;
+    private bool isPublished = false;
+    
+    // Error messages
+    private string titleError = "";
+    private string classError = "";
+    private string descriptionError = "";
+    
+    private string teacherName = "";
+    private DotNetObjectReference<UploadAssignmentT> objRef;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        objRef = DotNetObjectReference.Create(this);
+        await LoadTeacherName();
+        await base.OnInitializedAsync();
+    }
+    
+    private async Task LoadTeacherName()
+    {
+        try
+        {
+            // Get the teacher's ID from localStorage
+            var teacherId = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "currentTeacherId");
+            
+            if (!string.IsNullOrEmpty(teacherId) && int.TryParse(teacherId, out int id))
+            {
+                // Get the teacher data from the repository
+                var teacher = await UserRepository.GetAsync(id);
+                
+                if (teacher != null && teacher.Role == "Teacher")
+                {
+                    teacherName = $"{teacher.FirstName} {teacher.LastName}";
+                    Console.WriteLine($"Loaded teacher name: {teacherName}");
+                }
+                else
+                {
+                    Console.WriteLine("Teacher not found or invalid role");
+                    await JSRuntime.ToastrError("Error loading teacher data. Please try logging in again.");
+                    NavigationManager.NavigateTo("/teacher-login");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Teacher ID not found in localStorage");
+                await JSRuntime.ToastrError("Session expired. Please log in again.");
+                NavigationManager.NavigateTo("/teacher-login");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading teacher name: {ex.Message}");
+            await JSRuntime.ToastrError("Error loading teacher data. Please try logging in again.");
+            NavigationManager.NavigateTo("/teacher-login");
+        }
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Set up the drop zone with our JavaScript helper
+                await JSRuntime.InvokeVoidAsync("initializeDropZone", ".file-upload-area", objRef);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error setting up drop zone: {ex.Message}");
+            }
+        }
+    }
+    
+    public void Dispose()
+    {
+        objRef?.Dispose();
+    }
+    
+    private async Task PreventDefault(DragEventArgs e)
+    {
+        await Task.CompletedTask; // Just prevent default behavior
+    }
+    
+    [JSInvokable]
+    public void HandleDroppedFiles(string[] fileNames)
+    {
+        foreach (var fileName in fileNames)
+        {
+            uploadedFiles.Add(fileName);
+        }
+        StateHasChanged();
+    }
+    
+    private void ToggleNotifications()
+    {
+        showNotifications = !showNotifications;
+    }
+    
+    private async Task TriggerFileInput()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("triggerFileInput", "fileInput");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error triggering file input: {ex.Message}");
+        }
+    }
+    
+    private async Task OnFileChange(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            // Handle the selected files
+            foreach (var file in e.GetMultipleFiles(10)) // Limit to 10 files
+            {
+                // Save file to persistent storage
+                var savedFilePath = await FileStorageService.SaveFileAsync(file, "assignments");
+                uploadedFiles.Add(savedFilePath);
+                Console.WriteLine($"File saved: {file.Name} -> {savedFilePath}");
+            }
+            StateHasChanged(); // Refresh UI to show uploaded files
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"File upload error: {ex.Message}");
+            await JSRuntime.ToastrError($"Error uploading file: {ex.Message}");
+        }
+    }
+    
+    private void RemoveFile(string file)
+    {
+        uploadedFiles.Remove(file);
+    }
+    
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/teacher-dashboard");
+    }
+    
+    private async Task SaveDraft()
+    {
+        if (ValidateForm())
+        {
+            var assignment = new AssignmentModel
+            {
+                Title = assignmentTitle,
+                Description = description,
+                Class = selectedClass,
+                DueDate = dueDate,
+                AssignmentType = assignmentType,
+                Points = points,
+                TeacherName = teacherName,
+                IsPublished = false,
+                Attachments = new List<string>(uploadedFiles)
+            };
+            
+            await AssignmentService.AddAssignment(assignment);
+            
+            // Show success message
+            isPublished = false;
+            showSuccessMessage = true;
+        }
+    }
+    
+    private async Task PublishAssignment()
+    {
+        if (ValidateForm())
+        {
+            var assignment = new AssignmentModel
+            {
+                Title = assignmentTitle,
+                Description = description,
+                Class = selectedClass,
+                DueDate = dueDate,
+                AssignmentType = assignmentType,
+                Points = points,
+                TeacherName = teacherName,
+                IsPublished = true,
+                Attachments = new List<string>(uploadedFiles)
+            };
+            
+            await AssignmentService.AddAssignment(assignment);
+            
+            // Show success message
+            isPublished = true;
+            showSuccessMessage = true;
+            
+            // Log successful publishing for debugging
+            Console.WriteLine($"Assignment '{assignment.Title}' published successfully with ID {assignment.AssignmentId}");
+            
+            // Alert about available assignments for debugging
+            var assignments = await AssignmentService.GetAllAssignments();
+            Console.WriteLine($"Total assignments now available: {assignments.Count}");
+            Console.WriteLine($"Published assignments: {assignments.Count(a => a.IsPublished)}");
+        }
+    }
+    
+    private bool ValidateForm()
+    {
+        bool isValid = true;
+        
+        // Reset error messages
+        titleError = "";
+        classError = "";
+        descriptionError = "";
+        
+        // Validate title
+        if (string.IsNullOrWhiteSpace(assignmentTitle))
+        {
+            titleError = "Assignment title is required";
+            isValid = false;
+        }
+        
+        // Validate class
+        if (string.IsNullOrWhiteSpace(selectedClass))
+        {
+            classError = "Please select a class";
+            isValid = false;
+        }
+        
+        // Validate description
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            descriptionError = "Assignment description is required";
+            isValid = false;
+        }
+        
+        return isValid;
+    }
+    
+    private void GoToDashboard()
+    {
+        // Navigate to teacher dashboard with force reload to refresh the data
+        NavigationManager.NavigateTo("/teacher-dashboard", forceLoad: true);
+    }
+    
+    private void ViewAssignments()
+    {
+        // Navigate directly to the assignments page (student view) with force reload
+        NavigationManager.NavigateTo("/assignments", forceLoad: true);
+    }
+} 

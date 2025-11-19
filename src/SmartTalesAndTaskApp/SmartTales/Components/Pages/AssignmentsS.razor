@@ -1,0 +1,551 @@
+﻿@page "/assignments"
+@using SmartTales.Service
+@using SmartTales.Model
+@using Microsoft.AspNetCore.Components.Forms
+@inject AssignmentService AssignmentService
+@inject NavigationManager NavigationManager
+@inject OCRService OCRService
+@inject TTSService TTSService
+@inject IJSRuntime JSRuntime
+@inject FileStorageService FileStorageService
+@implements IDisposable
+<SmartTales.Components.Shared.Header Title="Assignments"/>
+
+<div class="assignments-container has-bottom-nav">
+    <div class="header">
+        <h1></h1>
+        <div class="header-actions">
+            <button class="refresh-btn" @onclick="ManualRefresh" disabled="@isLoading">
+                <i class="bi bi-arrow-clockwise @(isLoading ? "spinning" : "")"></i>
+            </button>
+            <div class="notification-icon" @onclick="ToggleNotifications">
+                <i class="bi bi-bell-fill"></i>
+                <span class="notification-badge">3</span>
+            </div>
+        </div>
+    </div>
+
+    @if (showNotifications)
+    {
+        <NotificationsPopup />
+    }
+
+    <div class="filter-section">
+        <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" placeholder="Search assignments..." @bind-value="searchTerm" @bind-value:event="oninput" @onkeyup="FilterAssignments" />
+        </div>
+
+        <div class="filter-buttons">
+            <button class="@(currentFilter == "all" ? "active" : "")" @onclick="@(() => FilterByStatus("all"))">All</button>
+            <button class="@(currentFilter == "pending" ? "active" : "")" @onclick="@(() => FilterByStatus("pending"))">Pending</button>
+            <button class="@(currentFilter == "completed" ? "active" : "")" @onclick="@(() => FilterByStatus("completed"))">Completed</button>
+        </div>
+    </div>
+
+    <!-- Smart Tools section -->
+    <div class="smart-tools-card">
+        <div class="smart-tools-header">
+            <div class="smart-tools-title">
+                <i class="bi bi-magic"></i>
+                <h3>Smart Tools</h3>
+            </div>
+            <div class="smart-tools-description">
+                Convert images to text or have text read aloud
+            </div>
+        </div>
+        
+        <div class="smart-tools-content">
+            <div class="smart-tools-buttons">
+                <InputFile id="imageFileInput" OnChange="OnImageSelected" style="display:none;" accept="image/*" />
+                <button class="smart-tool-button ocr-button" @onclick="TriggerImageFileInput">
+                    <div class="button-content">
+                        <div class="icon-container">
+                            <i class="bi bi-file-earmark-image"></i>
+                        </div>
+                        <div class="button-text">
+                            <span class="button-title">OCR Scanner</span>
+                            <span class="button-description">Extract text from images</span>
+                        </div>
+                    </div>
+                </button>
+                
+                <button class="smart-tool-button tts-button @(string.IsNullOrEmpty(extractedText) ? "disabled" : "")" 
+                        @onclick="SpeakSelectedText" 
+                        disabled="@string.IsNullOrEmpty(extractedText)">
+                    <div class="button-content">
+                        <div class="icon-container">
+                            <i class="bi bi-volume-up"></i>
+                        </div>
+                        <div class="button-text">
+                            <span class="button-title">Text to Speech</span>
+                            <span class="button-description">Listen to extracted text</span>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            
+            @if (!string.IsNullOrEmpty(selectedImageUrl))
+            {
+                <div class="selected-image-panel">
+                    <div class="selected-image-header">
+                        <h4>Selected Image</h4>
+                        <div class="image-info">
+                            @if (selectedImageFile != null)
+                            {
+                                <span>@selectedImageFile.Name</span>
+                                <span>(@Math.Round(selectedImageFile.Size / 1024.0, 2) KB)</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="selected-image-container">
+                        <img src="@selectedImageUrl" alt="Selected image" />
+                    </div>
+                </div>
+            }
+            
+            @if (!string.IsNullOrEmpty(extractedText))
+            {
+                <div class="extracted-text-panel">
+                    <div class="extracted-text-header">
+                        <h4>Extracted Text</h4>
+                        <div class="extracted-text-actions-header">
+                            <button class="icon-button copy-button" @onclick="CopyExtractedText" title="Copy text">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                            <button class="icon-button" @onclick="ClearExtractedText" title="Clear">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="extracted-text-content" tabindex="0" role="textbox" aria-label="Extracted text content">@extractedText</div>
+                    <div class="extracted-text-actions">
+                        @if (!isPlayingAudio)
+                        {
+                            <button class="action-btn play-btn" @onclick="SpeakSelectedText">
+                                <i class="bi bi-play-fill"></i>
+                                <span>Read Aloud</span>
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="action-btn stop-btn" @onclick="StopAudio">
+                                <i class="bi bi-stop-fill"></i>
+                                <span>Stop Audio</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+            
+            @if (isProcessingImage)
+            {
+                <div class="processing-overlay">
+                    <div class="processing-content">
+                        <div class="spinner-large"></div>
+                        <span>Processing image...</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading assignments...</p>
+        </div>
+    }
+    else if (filteredAssignments.Count == 0)
+    {
+        <div class="no-assignments">
+            <i class="bi bi-clipboard-x"></i>
+            <h3>No assignments found</h3>
+            <p>@(string.IsNullOrEmpty(searchTerm) ? "You don't have any assignments yet." : "No assignments match your search.")</p>
+        </div>
+    }
+    else
+    {
+        <div class="assignments-list">
+            @foreach (var assignment in filteredAssignments)
+            {
+                <div class="assignment-card">
+                    <div class="assignment-content" @onclick="() => ViewAssignmentDetails(assignment.AssignmentId)">
+                        <div class="assignment-header">
+                            <h3>@assignment.Title</h3>
+                            <span class="badge">@assignment.Points pts</span>
+                        </div>
+                        <div class="assignment-info">
+                            <div class="info-item">
+                                <i class="bi bi-person"></i>
+                                <span>@assignment.TeacherName</span>
+                            </div>
+                            <div class="info-item">
+                                <i class="bi bi-calendar"></i>
+                                <span>Due: @assignment.DueDate.ToString("MMM dd, yyyy")</span>
+                            </div>
+                            <div class="info-item">
+                                <i class="bi bi-people"></i>
+                                <span>@assignment.Class</span>
+                            </div>
+                        </div>
+                        <div class="assignment-description">
+                            @(assignment.Description.Length > 100 ? assignment.Description.Substring(0, 100) + "..." : assignment.Description)
+                        </div>
+                        <div class="assignment-footer">
+                            @if (assignment.Attachments.Count > 0)
+                            {
+                                <div class="attachment-info" @onclick:stopPropagation="true" @onclick="() => ToggleAttachments(assignment.AssignmentId)">
+                                    <i class="bi bi-paperclip"></i>
+                                    <span>@assignment.Attachments.Count attachment@(assignment.Attachments.Count > 1 ? "s" : "")</span>
+                                    <i class="bi @(expandedAttachments.Contains(assignment.AssignmentId) ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                                </div>
+                            }
+                            <div class="status-badge @(assignment.IsSubmitted ? "submitted" : "new")">
+                                <i class="bi @(assignment.IsSubmitted ? "bi-check-circle-fill" : "bi-circle")"></i>
+                                <span>@(assignment.IsSubmitted ? "Submitted" : "New")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (assignment.Attachments.Count > 0 && expandedAttachments.Contains(assignment.AssignmentId))
+                    {
+                        <div class="attachments-section" @onclick:stopPropagation="true">
+                            <FileDownloadComponent Files="assignment.Attachments" />
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<KidBottomNavBar CurrentPage="assignments" />
+
+<style>
+    .assignments-container.has-bottom-nav {
+        padding-bottom: 80px; /* Add padding to account for the bottom navbar */
+    }
+
+    .assignment-card {
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        margin-bottom: 1rem;
+        background: white;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .assignment-content {
+        padding: 1rem;
+        cursor: pointer;
+    }
+
+    .assignment-content:hover {
+        background-color: #f8f9fa;
+    }
+
+    .attachment-info {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+
+    .attachment-info:hover {
+        background-color: #e9ecef;
+    }
+
+    .attachments-section {
+        border-top: 1px solid #e9ecef;
+        padding: 1rem;
+        background-color: #f8f9fa;
+    }
+</style>
+
+@code {
+    private bool showNotifications = false;
+    private bool isLoading = true;
+    private string searchTerm = "";
+    private string currentFilter = "all";
+    private List<AssignmentModel> assignments = new List<AssignmentModel>();
+    private List<AssignmentModel> filteredAssignments = new List<AssignmentModel>();
+    private HashSet<int> expandedAttachments = new HashSet<int>();
+    
+    // OCR and TTS related variables
+    private string extractedText = "";
+    private bool isProcessingImage = false;
+    private bool isPlayingAudio = false;
+    private string selectedImageUrl = "";
+    private IBrowserFile selectedImageFile;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        // Subscribe to the AssignmentService's OnAssignmentsChanged event
+        AssignmentService.OnAssignmentsChanged += OnAssignmentsChanged;
+        
+        await RefreshAssignments();
+    }
+    
+    // Handle cleanup when component is disposed
+    public void Dispose()
+    {
+        // Unsubscribe from the event to prevent memory leaks
+        AssignmentService.OnAssignmentsChanged -= OnAssignmentsChanged;
+    }
+    
+    // Method called when assignments change
+    private async void OnAssignmentsChanged()
+    {
+        // Use InvokeAsync to safely update UI from the notification
+        await InvokeAsync(async () =>
+        {
+            Console.WriteLine("Assignments changed, refreshing...");
+            await RefreshAssignments();
+            StateHasChanged();
+        });
+    }
+    
+    public async Task RefreshAssignments()
+    {
+        isLoading = true;
+        
+        // Get assignments from service
+        var allAssignments = await AssignmentService.GetAllAssignments();
+        
+        // Only show published assignments to students
+        assignments = allAssignments
+            .Where(a => a.IsPublished)
+            .OrderByDescending(a => a.CreatedAt) // Sort by newest first
+            .ToList();
+        
+        // Apply current filter
+        currentFilter = "all"; // Reset to all
+        filteredAssignments = new List<AssignmentModel>(assignments);
+        
+        isLoading = false;
+        
+        Console.WriteLine($"Loaded {assignments.Count} published assignments for student");
+    }
+    
+    private void ToggleNotifications()
+    {
+        showNotifications = !showNotifications;
+    }
+    
+    private void FilterAssignments()
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            FilterByStatus(currentFilter);
+            return;
+        }
+        
+        var searchLower = searchTerm.ToLower();
+        
+        filteredAssignments = assignments
+            .Where(a => 
+                a.Title.ToLower().Contains(searchLower) || 
+                a.Description.ToLower().Contains(searchLower) ||
+                a.TeacherName.ToLower().Contains(searchLower) ||
+                a.Class.ToLower().Contains(searchLower))
+            .ToList();
+        
+        ApplyStatusFilter();
+    }
+    
+    private void FilterByStatus(string status)
+    {
+        currentFilter = status;
+        
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filteredAssignments = new List<AssignmentModel>(assignments);
+        }
+        else
+        {
+            FilterAssignments();
+            return;
+        }
+        
+        ApplyStatusFilter();
+    }
+    
+    private void ApplyStatusFilter()
+    {
+        switch (currentFilter)
+        {
+            case "completed":
+                filteredAssignments = filteredAssignments.Where(a => a.IsSubmitted).ToList();
+                break;
+            case "pending":
+                filteredAssignments = filteredAssignments.Where(a => !a.IsSubmitted).ToList();
+                break;
+            // "all" case - keep all assignments
+        }
+    }
+    
+    private void ViewAssignmentDetails(int assignmentId)
+    {
+        // Navigate to assignment details page
+        NavigationManager.NavigateTo($"/assignment/{assignmentId}");
+    }
+
+    private void ToggleAttachments(int assignmentId)
+    {
+        if (expandedAttachments.Contains(assignmentId))
+        {
+            expandedAttachments.Remove(assignmentId);
+        }
+        else
+        {
+            expandedAttachments.Add(assignmentId);
+        }
+        StateHasChanged();
+    }
+
+    private async Task ManualRefresh()
+    {
+        Console.WriteLine("Manually refreshing assignments...");
+        await RefreshAssignments();
+    }
+    
+    // OCR and TTS functionality
+    
+    private async Task TriggerImageFileInput()
+    {
+        await JSRuntime.InvokeVoidAsync("triggerFileInput", "imageFileInput");
+    }
+    
+    private async Task OnImageSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            isProcessingImage = true;
+            StateHasChanged();
+            
+            var file = e.File;
+            if (file != null)
+            {
+                selectedImageFile = file;
+                
+                // Create a temporary URL for the selected image
+                var imageStream = file.OpenReadStream(maxAllowedSize: 10485760); // 10MB max
+                var buffer = new byte[file.Size];
+                await imageStream.ReadAsync(buffer);
+                var base64Image = Convert.ToBase64String(buffer);
+                selectedImageUrl = $"data:{file.ContentType};base64,{base64Image}";
+                
+                // Reset the stream position to beginning for OCR
+                imageStream = file.OpenReadStream(maxAllowedSize: 10485760);
+                
+                // Call OCR service to extract text
+                extractedText = await OCRService.ExtractTextFromImage(imageStream, file.Name);
+                
+                Console.WriteLine($"Extracted text: {(extractedText.Length > 50 ? extractedText.Substring(0, 50) + "..." : extractedText)}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error processing image: {ex.Message}");
+            extractedText = $"Error processing image: {ex.Message}";
+        }
+        finally
+        {
+            isProcessingImage = false;
+            StateHasChanged();
+        }
+    }
+    
+    private void ClearExtractedText()
+    {
+        extractedText = "";
+        selectedImageUrl = "";
+        selectedImageFile = null;
+        StateHasChanged();
+    }
+    
+    private async Task CopyExtractedText()
+    {
+        if (!string.IsNullOrEmpty(extractedText))
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", extractedText);
+            // Optionally show a notification that text was copied
+            await JSRuntime.InvokeVoidAsync("showToast", "Text copied to clipboard");
+        }
+    }
+    
+    private async Task SpeakSelectedText()
+    {
+        if (string.IsNullOrEmpty(extractedText) || isPlayingAudio)
+            return;
+        
+        try
+        {
+            isPlayingAudio = true;
+            StateHasChanged();
+            
+            // Get audio data from TTS service
+            var audioData = await TTSService.SynthesizeText(extractedText);
+            
+            // Convert to base64 for playing in browser
+            var base64Audio = Convert.ToBase64String(audioData);
+            
+            // Play audio using JavaScript
+            await JSRuntime.InvokeVoidAsync("playAudio", base64Audio);
+            
+            // Wait for audio to finish - with timeout protection
+            try {
+                var timeoutTask = Task.Delay(30000); // 30 second timeout
+                var audioFinishedTask = JSRuntime.InvokeVoidAsync("audioFinishedCallback").AsTask();
+                
+                var completedTask = await Task.WhenAny(audioFinishedTask, timeoutTask);
+                if (completedTask == timeoutTask)
+                {
+                    // Audio playback took too long, might be hanging
+                    Console.WriteLine("Audio playback timeout - stopping playback");
+                    await StopAudio();
+                }
+            }
+            catch (Exception audioEx)
+            {
+                Console.WriteLine($"Error waiting for audio to finish: {audioEx.Message}");
+                await StopAudio();
+            }
+            
+            isPlayingAudio = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error playing audio: {ex.Message}");
+            isPlayingAudio = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task StopAudio()
+    {
+        await JSRuntime.InvokeVoidAsync("stopAudio");
+        isPlayingAudio = false;
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("setupAudioCallbacks");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error setting up audio callbacks: {ex.Message}");
+            }
+        }
+    }
+}

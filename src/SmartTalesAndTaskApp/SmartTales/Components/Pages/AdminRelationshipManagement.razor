@@ -1,0 +1,548 @@
+@using SmartTales.Data
+@using SmartTales.Model
+@using SmartTales.Service
+@using SmartTales.Service.Extensions
+@inject AdminService _adminService
+@inject IJSRuntime _JS
+@inject NavigationManager Navigation
+
+<div class="relationship-management-container">
+    <!-- Header -->
+    <div class="relationship-management-header">
+        <div class="header-left">
+            <h1>Parent-Child Relationships</h1>
+            <p>Manage family connections and relationships</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn-add-relationship" @onclick="ShowAddRelationshipModal">
+                <i class="fas fa-plus"></i>
+                <span>Add Relationship</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="filters-section">
+        <div class="search-container">
+            <div class="search-input-wrapper">
+                <i class="fas fa-search"></i>
+                <input type="text" class="search-input" placeholder="Search by parent or child name..." 
+                       @oninput="OnSearchInput" value="@searchTerm" />
+                @if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    <button class="clear-search" @onclick="ClearSearch">
+                        <i class="fas fa-times"></i>
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Relationships Table -->
+    <div class="relationships-table-container">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <i class="fas fa-spinner fa-spin"></i>
+                <h3>Loading relationships...</h3>
+                <p>Please wait while we fetch the data.</p>
+            </div>
+        }
+        else if (!filteredRelationships.Any())
+        {
+            <div class="no-relationships-state">
+                <i class="fas fa-link"></i>
+                <h3>No relationships found</h3>
+                <p>@(string.IsNullOrEmpty(searchTerm) ? "No parent-child relationships have been created yet." : "No relationships match your search criteria.")</p>
+                @if (string.IsNullOrEmpty(searchTerm))
+                {
+                    <button class="btn-add-first-relationship" @onclick="ShowAddRelationshipModal">
+                        <i class="fas fa-plus"></i>
+                        <span>Add First Relationship</span>
+                    </button>
+                }
+            </div>
+        }
+        else
+        {
+            <table class="relationships-table">
+                <thead>
+                    <tr>
+                        <th class="sortable" @onclick='() => SortRelationships("Parent")'>
+                            Parent
+                            <i class="fas @GetSortIcon("Parent")"></i>
+                        </th>
+                        <th class="sortable" @onclick='() => SortRelationships("Child")'>
+                            Child
+                            <i class="fas @GetSortIcon("Child")"></i>
+                        </th>
+                        <th class="sortable" @onclick='() => SortRelationships("CreatedAt")'>
+                            Created Date
+                            <i class="fas @GetSortIcon("CreatedAt")"></i>
+                        </th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var relationship in GetPagedRelationships())
+                    {
+                        <tr>
+                            <td>
+                                <div class="user-info">
+                                    <div class="user-avatar parent">
+                                        <i class="fas fa-user-friends"></i>
+                                    </div>
+                                    <div class="user-details">
+                                        <div class="user-name">@relationship.ParentName</div>
+                                        <div class="user-email">@relationship.ParentEmail</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="user-info">
+                                    <div class="user-avatar child">
+                                        <i class="fas fa-child"></i>
+                                    </div>
+                                    <div class="user-details">
+                                        <div class="user-name">@relationship.ChildName</div>
+                                        <div class="user-email">@relationship.ChildEmail</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>@relationship.CreatedAt.ToString("MMM dd, yyyy")</td>
+                            <td>
+                                <span class="status-badge @(relationship.IsActive ? "active" : "inactive")">
+                                    @(relationship.IsActive ? "Active" : "Inactive")
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    @if (relationship.IsActive)
+                                    {
+                                        <button class="btn-deactivate" @onclick="() => ShowDeactivateConfirmation(relationship)" title="Deactivate Relationship">
+                                            <i class="fas fa-ban"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn-activate" @onclick="() => ActivateRelationship(relationship)" title="Activate Relationship">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                    }
+                                    <button class="btn-delete" @onclick="() => ShowDeleteConfirmation(relationship)" title="Delete Relationship">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, filteredRelationships.Count) of @filteredRelationships.Count relationships
+                </div>
+                <div class="pagination-controls">
+                    <button class="btn-page" @onclick="() => ChangePage(currentPage - 1)" disabled="@(currentPage <= 1)">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                    {
+                        <button class="btn-page @(i == currentPage ? "active" : "")" @onclick="() => ChangePage(i)">
+                            @i
+                        </button>
+                    }
+                    <button class="btn-page" @onclick="() => ChangePage(currentPage + 1)" disabled="@(currentPage >= totalPages)">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Add Relationship Modal -->
+@if (showAddRelationshipModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-content relationship-modal">
+            <h3>Add Parent-Child Relationship</h3>
+            
+            <div class="form-group">
+                <label>Parent Email *</label>
+                <input type="email" @bind="newRelationship.ParentEmail" class="form-control" placeholder="Enter parent's email address" />
+            </div>
+
+            <div class="form-group">
+                <label>Child Email *</label>
+                <input type="email" @bind="newRelationship.ChildEmail" class="form-control" placeholder="Enter child's email address" />
+            </div>
+
+            <div class="modal-buttons">
+                <button class="btn-cancel" @onclick="CloseAddRelationshipModal">Cancel</button>
+                <button class="btn-confirm" @onclick="CreateRelationship">Create Relationship</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteConfirmation)
+{
+    <div class="modal-overlay">
+        <div class="modal-content delete-modal">
+            <h3>Delete Relationship</h3>
+            <p>Are you sure you want to delete the relationship between <strong>@relationshipToDelete?.ParentName</strong> and <strong>@relationshipToDelete?.ChildName</strong>?</p>
+            <p class="warning-text">This action cannot be undone.</p>
+            <div class="modal-buttons">
+                <button class="btn-cancel" @onclick="() => showDeleteConfirmation = false">Cancel</button>
+                <button class="btn-confirm-delete" @onclick="ConfirmDeleteRelationship">Delete Relationship</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Deactivate Confirmation Modal -->
+@if (showDeactivateConfirmation)
+{
+    <div class="modal-overlay">
+        <div class="modal-content deactivate-modal">
+            <h3>Deactivate Relationship</h3>
+            <p>Are you sure you want to deactivate the relationship between <strong>@relationshipToDeactivate?.ParentName</strong> and <strong>@relationshipToDeactivate?.ChildName</strong>?</p>
+            <p>The relationship can be reactivated later if needed.</p>
+            <div class="modal-buttons">
+                <button class="btn-cancel" @onclick="() => showDeactivateConfirmation = false">Cancel</button>
+                <button class="btn-confirm" @onclick="ConfirmDeactivateRelationship">Deactivate</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // Data models
+    public class RelationshipViewModel
+    {
+        public int Id { get; set; }
+        public int ParentId { get; set; }
+        public int ChildId { get; set; }
+        public string ParentName { get; set; } = string.Empty;
+        public string ParentEmail { get; set; } = string.Empty;
+        public string ChildName { get; set; } = string.Empty;
+        public string ChildEmail { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    public class NewRelationshipModel
+    {
+        public string ParentEmail { get; set; } = string.Empty;
+        public string ChildEmail { get; set; } = string.Empty;
+    }
+
+    // Component state
+    private List<RelationshipViewModel> allRelationships = new();
+    private List<RelationshipViewModel> filteredRelationships = new();
+    private bool isLoading = true;
+    
+    // Search and filtering
+    private string searchTerm = string.Empty;
+    
+    // Sorting
+    private string sortColumn = string.Empty;
+    private bool sortAscending = true;
+    
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages => (int)Math.Ceiling((double)filteredRelationships.Count / pageSize);
+    
+    // Modals
+    private bool showAddRelationshipModal = false;
+    private bool showDeleteConfirmation = false;
+    private bool showDeactivateConfirmation = false;
+    private RelationshipViewModel? relationshipToDelete;
+    private RelationshipViewModel? relationshipToDeactivate;
+    private NewRelationshipModel newRelationship = new();
+    
+    // Admin context
+    private int currentAdminId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var storedAdminId = await _JS.InvokeAsync<string>("localStorage.getItem", "currentAdminId");
+            if (string.IsNullOrEmpty(storedAdminId) || !int.TryParse(storedAdminId, out currentAdminId))
+            {
+                Navigation.NavigateTo("/admin-login");
+                return;
+            }
+
+            await LoadRelationships();
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading relationships: {ex.Message}");
+        }
+    }
+
+    private async Task LoadRelationships()
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            var relationships = await _adminService.GetAllParentChildRelationshipsAsync(currentAdminId);
+            allRelationships = relationships.Select(r => new RelationshipViewModel
+            {
+                Id = r.Id,
+                ParentId = r.ParentId,
+                ChildId = r.ChildId,
+                ParentName = r.ParentName ?? "Unknown Parent",
+                ParentEmail = r.ParentEmail ?? "No Email",
+                ChildName = r.ChildName ?? "Unknown Child",
+                ChildEmail = r.ChildEmail ?? "No Email",
+                CreatedAt = r.CreatedAt,
+                IsActive = r.IsActive
+            }).ToList();
+
+            FilterRelationships();
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading relationships: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        await Task.Delay(300); // Debounce search
+        FilterRelationships();
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = string.Empty;
+        FilterRelationships();
+    }
+
+    private void FilterRelationships()
+    {
+        filteredRelationships = allRelationships.Where(r =>
+            string.IsNullOrEmpty(searchTerm) ||
+            r.ParentName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+            r.ParentEmail.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+            r.ChildName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+            r.ChildEmail.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+        ).ToList();
+
+        ApplySort();
+        currentPage = 1; // Reset to first page when filtering
+        StateHasChanged();
+    }
+
+    private void SortRelationships(string column)
+    {
+        if (sortColumn == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+
+        ApplySort();
+        StateHasChanged();
+    }
+
+    private void ApplySort()
+    {
+        if (string.IsNullOrEmpty(sortColumn)) return;
+
+        filteredRelationships = sortColumn switch
+        {
+            "Parent" => sortAscending
+                ? filteredRelationships.OrderBy(r => r.ParentName).ToList()
+                : filteredRelationships.OrderByDescending(r => r.ParentName).ToList(),
+            "Child" => sortAscending
+                ? filteredRelationships.OrderBy(r => r.ChildName).ToList()
+                : filteredRelationships.OrderByDescending(r => r.ChildName).ToList(),
+            "CreatedAt" => sortAscending
+                ? filteredRelationships.OrderBy(r => r.CreatedAt).ToList()
+                : filteredRelationships.OrderByDescending(r => r.CreatedAt).ToList(),
+            _ => filteredRelationships
+        };
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (sortColumn != column) return "fa-sort";
+        return sortAscending ? "fa-sort-up" : "fa-sort-down";
+    }
+
+    private List<RelationshipViewModel> GetPagedRelationships()
+    {
+        return filteredRelationships
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowAddRelationshipModal()
+    {
+        newRelationship = new NewRelationshipModel();
+        showAddRelationshipModal = true;
+    }
+
+    private void CloseAddRelationshipModal()
+    {
+        showAddRelationshipModal = false;
+        newRelationship = new NewRelationshipModel();
+    }
+
+    private async Task CreateRelationship()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(newRelationship.ParentEmail) || string.IsNullOrEmpty(newRelationship.ChildEmail))
+            {
+                await _JS.ToastrError("Please fill in both parent and child email addresses.");
+                return;
+            }
+
+            var success = await _adminService.CreateParentChildRelationshipByEmailAsync(
+                newRelationship.ParentEmail, newRelationship.ChildEmail, currentAdminId);
+
+            if (success)
+            {
+                await _JS.ToastrSuccess("Parent-child relationship created successfully.");
+                await LoadRelationships();
+                CloseAddRelationshipModal();
+            }
+            else
+            {
+                await _JS.ToastrError("Failed to create relationship. Please check that both users exist and have the correct roles.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error creating relationship: {ex.Message}");
+        }
+    }
+
+    private void ShowDeleteConfirmation(RelationshipViewModel relationship)
+    {
+        relationshipToDelete = relationship;
+        showDeleteConfirmation = true;
+    }
+
+    private async Task ConfirmDeleteRelationship()
+    {
+        if (relationshipToDelete == null) return;
+
+        try
+        {
+            var success = await _adminService.RemoveParentChildRelationshipAsync(
+                relationshipToDelete.ParentId, relationshipToDelete.ChildId, currentAdminId);
+
+            if (success)
+            {
+                await _JS.ToastrSuccess("Relationship deleted successfully.");
+                await LoadRelationships();
+            }
+            else
+            {
+                await _JS.ToastrError("Failed to delete relationship.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error deleting relationship: {ex.Message}");
+        }
+        finally
+        {
+            showDeleteConfirmation = false;
+            relationshipToDelete = null;
+        }
+    }
+
+    private void ShowDeactivateConfirmation(RelationshipViewModel relationship)
+    {
+        relationshipToDeactivate = relationship;
+        showDeactivateConfirmation = true;
+    }
+
+    private async Task ConfirmDeactivateRelationship()
+    {
+        if (relationshipToDeactivate == null) return;
+
+        try
+        {
+            var success = await _adminService.DeactivateParentChildRelationshipAsync(
+                relationshipToDeactivate.ParentId, relationshipToDeactivate.ChildId, currentAdminId);
+
+            if (success)
+            {
+                await _JS.ToastrSuccess("Relationship deactivated successfully.");
+                await LoadRelationships();
+            }
+            else
+            {
+                await _JS.ToastrError("Failed to deactivate relationship.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error deactivating relationship: {ex.Message}");
+        }
+        finally
+        {
+            showDeactivateConfirmation = false;
+            relationshipToDeactivate = null;
+        }
+    }
+
+    private async Task ActivateRelationship(RelationshipViewModel relationship)
+    {
+        try
+        {
+            var success = await _adminService.ActivateParentChildRelationshipAsync(
+                relationship.ParentId, relationship.ChildId, currentAdminId);
+
+            if (success)
+            {
+                await _JS.ToastrSuccess("Relationship activated successfully.");
+                await LoadRelationships();
+            }
+            else
+            {
+                await _JS.ToastrError("Failed to activate relationship.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error activating relationship: {ex.Message}");
+        }
+    }
+}

@@ -1,0 +1,376 @@
+﻿@page "/chatbot"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+@using System.Collections.Generic
+@using System.Net.Http
+@using System.Net.Http.Json
+@using System.Threading.Tasks
+@using Microsoft.AspNetCore.Components.Forms
+@using SmartTales.Service
+@using SmartTales.Model
+@inject IJSRuntime JSRuntime
+@inject StoryService StoryService
+@inject NavigationManager NavigationManager
+
+<div class="professional-storyteller">
+    <!-- Modern Header -->
+    <header class="modern-header">
+        <div class="header-container">
+            <button class="back-button" @onclick="GoBack">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+            </button>
+
+            <div class="brand-section">
+                <div class="ai-logo">
+                    <div class="logo-circle">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                            <path d="M2 17l10 5 10-5"/>
+                            <path d="M2 12l10 5 10-5"/>
+                        </svg>
+                    </div>
+                    <div class="logo-glow"></div>
+                </div>
+
+                <div class="brand-info">
+                    <h1 class="brand-title">StoryTeller AI</h1>
+                    <div class="status-indicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Ready to create magical stories</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="content-area" @ref="chatContainer">
+        @if (messages.Count == 0)
+        {
+            <!-- Professional Welcome Section -->
+            <section class="welcome-section">
+                <div class="welcome-container">
+                    <!-- Animated Background Elements -->
+                    <div class="background-elements">
+                        <div class="floating-element element-1">✨</div>
+                        <div class="floating-element element-2">📚</div>
+                        <div class="floating-element element-3">🌟</div>
+                        <div class="floating-element element-4">🎭</div>
+                        <div class="floating-element element-5">🦄</div>
+                        <div class="floating-element element-6">🏰</div>
+                    </div>
+
+                    <!-- Welcome Card -->
+                    <div class="welcome-card">
+                        <div class="welcome-header">
+                            <div class="main-icon">
+                                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                                </svg>
+                                <div class="icon-pulse"></div>
+                            </div>
+                            <h2 class="welcome-title">Welcome to StoryTeller AI</h2>
+                            <p class="welcome-description">Your personal AI companion for creating magical stories and adventures</p>
+                        </div>
+
+                        <!-- Story Prompts Section -->
+                        <div class="prompts-section">
+                            <h3 class="prompts-title">Try these story ideas:</h3>
+                            <div class="prompts-grid">
+                                <button class="story-prompt" @onclick="@(() => SendSuggestion("Tell me a story about a brave little mouse"))">
+                                    <div class="prompt-emoji">🐭</div>
+                                    <span class="prompt-text">Brave Little Mouse</span>
+                                </button>
+                                <button class="story-prompt" @onclick="@(() => SendSuggestion("Tell me a story about a magical forest"))">
+                                    <div class="prompt-emoji">🌳</div>
+                                    <span class="prompt-text">Magical Forest</span>
+                                </button>
+                                <button class="story-prompt" @onclick="@(() => SendSuggestion("Tell me a story about space adventure"))">
+                                    <div class="prompt-emoji">🚀</div>
+                                    <span class="prompt-text">Space Adventure</span>
+                                </button>
+                                <button class="story-prompt" @onclick="@(() => SendSuggestion("Tell me a story about a friendly dragon"))">
+                                    <div class="prompt-emoji">🐉</div>
+                                    <span class="prompt-text">Friendly Dragon</span>
+                                </button>
+                                <button class="story-prompt" @onclick="@(() => SendSuggestion("Tell me a story about underwater kingdom"))">
+                                    <div class="prompt-emoji">🌊</div>
+                                    <span class="prompt-text">Underwater Kingdom</span>
+                                </button>
+                                <button class="story-prompt" @onclick="@(() => SendSuggestion("Tell me a story about time travel"))">
+                                    <div class="prompt-emoji">⏰</div>
+                                    <span class="prompt-text">Time Travel</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        }
+        else
+        {
+            <div class="messages-list">
+                @foreach (var message in messages)
+                {
+                    <div class="message-wrapper @(message.IsUser ? "user-wrapper" : "ai-wrapper")">
+                        @if (!message.IsUser)
+                        {
+                            <div class="ai-avatar-small">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                                    <path d="M2 17l10 5 10-5"/>
+                                    <path d="M2 12l10 5 10-5"/>
+                                </svg>
+                            </div>
+                        }
+
+                        <div class="message-bubble @(message.IsUser ? "user-bubble" : "ai-bubble")">
+                            @if (message.IsThinking)
+                            {
+                                <div class="thinking-animation">
+                                    <div class="thinking-content">
+                                        <div class="ai-brain">
+                                            <div class="brain-wave wave-1"></div>
+                                            <div class="brain-wave wave-2"></div>
+                                            <div class="brain-wave wave-3"></div>
+                                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/>
+                                                <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/>
+                                            </svg>
+                                        </div>
+                                        <div class="thinking-text">
+                                            <p>@message.ThinkingText</p>
+                                            <div class="typing-dots">
+                                                <span></span>
+                                                <span></span>
+                                                <span></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="message-text">
+                                    @((MarkupString)message.Content)
+                                </div>
+
+                                @if (message.Questions != null && message.Questions.Count > 0 && !message.IsUser)
+                                {
+                                    <div class="follow-up-questions">
+                                        <div class="questions-header">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                                                <path d="M12 17h.01"/>
+                                            </svg>
+                                            <span>Continue the conversation:</span>
+                                        </div>
+                                        <div class="questions-grid">
+                                            @foreach (var question in message.Questions)
+                                            {
+                                                <button class="question-chip" @onclick="@(() => SendSuggestion(question))">
+                                                    @question
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+
+                        @if (message.IsUser)
+                        {
+                            <div class="user-avatar">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                    <circle cx="12" cy="7" r="4"/>
+                                </svg>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Professional Input Section -->
+    <footer class="input-section">
+        <div class="input-container">
+            <div class="input-wrapper">
+                <input type="text"
+                       @bind="currentPrompt"
+                       @bind:event="oninput"
+                       placeholder="Ask me to create a story..."
+                       @onkeypress="HandleKeyPress"
+                       class="message-input"
+                       disabled="@isProcessing" />
+                <button class="send-button @(isProcessing ? "sending" : "")"
+                        @onclick="SendMessage"
+                        disabled="@(isProcessing || string.IsNullOrWhiteSpace(currentPrompt))">
+                    @if (isProcessing)
+                    {
+                        <div class="loading-spinner">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                            </svg>
+                        </div>
+                    }
+                    else
+                    {
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"/>
+                            <polygon points="22,2 15,22 11,13 2,9 22,2"/>
+                        </svg>
+                    }
+                </button>
+            </div>
+            <div class="input-hint">
+                <span class="hint-text">💡 Try: "Tell me a story about..." or ask questions about previous stories</span>
+            </div>
+        </div>
+    </footer>
+</div>
+
+@code {
+    private ElementReference chatContainer;
+    private List<ChatMessage> messages = new();
+    private string currentPrompt = "";
+    private bool isProcessing;
+    private string[] thinkingMessages = new[]
+    {
+        "✨ Crafting your magical story...",
+        "🎭 Creating fascinating characters...",
+        "📖 Weaving an enchanting plot...",
+        "🌟 Adding wonder and excitement...",
+        "🎪 Building the perfect adventure...",
+        "🏰 Setting the magical scene...",
+        "💫 Polishing the final touches..."
+    };
+    private int currentThinkingIndex = 0;
+    private System.Threading.Timer? thinkingTimer;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(currentPrompt) || isProcessing)
+            return;
+
+        try
+        {
+            isProcessing = true;
+            StateHasChanged();
+
+            // Add user message
+            messages.Add(new ChatMessage 
+            { 
+                Content = currentPrompt, 
+                IsUser = true 
+            });
+            
+            var userPrompt = currentPrompt;
+            currentPrompt = "";
+            StateHasChanged();
+            await ScrollToBottom();
+
+            // Add thinking message
+            var thinkingMessage = new ChatMessage 
+            { 
+                IsThinking = true,
+                IsUser = false,
+                ThinkingText = thinkingMessages[0]
+            };
+            messages.Add(thinkingMessage);
+            StateHasChanged();
+            await ScrollToBottom();
+
+            // Start the thinking animation
+            currentThinkingIndex = 0;
+            thinkingTimer = new System.Threading.Timer(async _ =>
+            {
+                currentThinkingIndex = (currentThinkingIndex + 1) % thinkingMessages.Length;
+                thinkingMessage.ThinkingText = thinkingMessages[currentThinkingIndex];
+                await InvokeAsync(StateHasChanged);
+            }, null, 0, 2000);
+
+            try
+            {
+                // Add a minimum delay to show the thinking animation
+                await Task.Delay(4000);
+                var result = await StoryService.GenerateStoryAsync(userPrompt);
+                thinkingMessage.IsThinking = false;
+                thinkingMessage.Content = result.story.Replace("\n", "<br>");
+                thinkingMessage.Questions = result.questions;
+            }
+            catch (Exception ex)
+            {
+                thinkingMessage.IsThinking = false;
+                thinkingMessage.Content = "I apologize, but I encountered an error while generating the story. Please try again!";
+                Console.WriteLine($"Error generating story: {ex.Message}");
+            }
+            finally
+            {
+                thinkingTimer?.Dispose();
+                thinkingTimer = null;
+            }
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task SendSuggestion(string suggestion)
+    {
+        currentPrompt = suggestion;
+        await SendMessage();
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("scrollToBottom", chatContainer);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error scrolling: {ex.Message}");
+        }
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo("/kid-dashboard");
+    }
+
+    private class ChatMessage
+    {
+        public string Content { get; set; } = "";
+        public bool IsUser { get; set; }
+        public bool IsThinking { get; set; }
+        public string ThinkingText { get; set; } = "";
+        public List<string> Questions { get; set; } = new();
+    }
+}
+
+
+

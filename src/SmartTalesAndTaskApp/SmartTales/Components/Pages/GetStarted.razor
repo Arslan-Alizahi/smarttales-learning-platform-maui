@@ -1,0 +1,28 @@
+﻿@page "/"
+@inject NavigationManager NavigationManager
+
+<div class="container">
+    <div class="content-wrapper">
+        <div class="image-side">
+            <img src="images/getstarted.jpg" alt="App Preview">
+            <div class="overlay"></div>
+        </div>
+        
+        <div class="text-side">
+            <div class="text-content">
+                <h1>Welcome to Smart Tales & Task</h1>
+                <p>Discover engaging stories and interactive learning activities designed for children. Track progress, complete assignments, and have fun learning!</p>
+                <button class="cta-button" @onclick="NavigateToLogin">
+                    Get Started <span class="arrow">→</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private void NavigateToLogin()
+    {
+        NavigationManager.NavigateTo("/login");
+    }
+}

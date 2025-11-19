@@ -1,0 +1,539 @@
+@page "/SettingsT"
+@using SmartTales.Repository.IRepository
+@using SmartTales.Data
+@using SmartTales.Service.Extensions
+@inject IUserRepository UserRepository
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+
+@* Add script reference at the top *@
+<PageTitle>Settings</PageTitle>
+<HeadContent>
+    <script src="js/interop.js"></script>
+</HeadContent>
+
+<div class="settings-container">
+    <div class="header">
+        <h1>Settings</h1>
+        <div class="notification-icon" @onclick="ToggleNotifications">
+            <i class="bi bi-bell-fill"></i>
+            <span class="notification-badge">3</span>
+        </div>
+    </div>
+
+    @if (showNotifications)
+    {
+        <NotificationsPopup />
+    }
+
+    <div class="settings-grid">
+        <div class="settings-section">
+            <div class="section-header">
+                <i class="bi bi-person-circle"></i>
+                <h2>Profile</h2>
+            </div>
+            
+            @if (isLoading)
+            {
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <p>Loading profile...</p>
+                </div>
+            }
+            else if (isEditing)
+            {
+                <div class="profile-edit-form">
+                    <div class="profile-image-upload">
+                        <div class="profile-image @(hasProfileImage ? "has-image" : "")" @onclick="TriggerFileInput">
+                            @if (hasProfileImage)
+                            {
+                                <img src="@profileImageUrl" alt="@teacherName" />
+                            }
+                            else
+                            {
+                                <i class="bi bi-person"></i>
+                            }
+                            <div class="camera-overlay">
+                                <i class="bi bi-camera"></i>
+                                <span>Change Photo</span>
+                            </div>
+                        </div>
+                        <InputFile id="profileImageInput" OnChange="OnProfileImageSelected" style="display: none;" accept="image/*" />
+                    </div>
+                    <div class="form-group">
+                        <label for="firstName">First Name</label>
+                        <input type="text" id="firstName" @bind="firstName" />
+                    </div>
+                    <div class="form-group">
+                        <label for="lastName">Last Name</label>
+                        <input type="text" id="lastName" @bind="lastName" />
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" @bind="email" />
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Phone Number</label>
+                        <input type="tel" id="phone" @bind="phoneNumber" />
+                    </div>
+                    <div class="form-group">
+                        <label for="specialization">Specialization</label>
+                        <input type="text" id="specialization" @bind="specialization" />
+                    </div>
+                    <div class="form-group">
+                        <label for="experience">Years of Experience</label>
+                        <input type="number" id="experience" @bind="yearsOfExperience" min="0" />
+                    </div>
+                    <div class="edit-buttons">
+                        <button class="btn-cancel" @onclick="CancelEdit">Cancel</button>
+                        <button class="btn-save" @onclick="SaveProfile">Save</button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="profile-card">
+                    <div class="profile-image @(hasProfileImage ? "has-image" : "")" @onclick="StartEditing">
+                        @if (hasProfileImage)
+                        {
+                            <img src="@profileImageUrl" alt="@teacherName" />
+                        }
+                        else
+                        {
+                            <i class="bi bi-person"></i>
+                        }
+                        <div class="camera-overlay">
+                            <i class="bi bi-camera"></i>
+                            <span>Change Photo</span>
+                        </div>
+                    </div>
+                    <div class="profile-details">
+                        <h3>@teacherName</h3>
+                        <p>@specialization Teacher</p>
+                        <p>@email</p>
+                        <p>Phone: @phoneNumber</p>
+                        <p>Experience: @yearsOfExperience years</p>
+                    </div>
+                    <button class="btn-edit" @onclick="StartEditing">
+                        <i class="bi bi-pencil"></i> Edit
+                    </button>
+                </div>
+            }
+            
+            <div class="form-group">
+                <label for="language">Language</label>
+                <select id="language" @bind="language">
+                    <option value="english">English</option>
+                    <option value="spanish">Spanish</option>
+                    <option value="french">French</option>
+                    <option value="german">German</option>
+                </select>
+            </div>
+            
+            
+        </div>
+        
+        
+            
+            
+        
+        <div class="settings-section">
+            <div class="section-header">
+                <i class="bi bi-shield-check"></i>
+                <h2>Security</h2>
+            </div>
+            
+            <div class="form-group">
+                <label for="current-password">Current Password</label>
+                <div class="password-input">
+                    <input type="@(showPassword ? "text" : "password")" id="current-password" @bind="currentPassword" placeholder="Enter current password" />
+                    <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")" @onclick="TogglePasswordVisibility"></i>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="new-password">New Password</label>
+                <div class="password-input">
+                    <input type="@(showPassword ? "text" : "password")" id="new-password" @bind="newPassword" placeholder="Enter new password" />
+                    <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")" @onclick="TogglePasswordVisibility"></i>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="confirm-password">Confirm New Password</label>
+                <div class="password-input">
+                    <input type="@(showPassword ? "text" : "password")" id="confirm-password" @bind="confirmPassword" placeholder="Confirm new password" />
+                    <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")" @onclick="TogglePasswordVisibility"></i>
+                </div>
+            </div>
+            
+            <button class="btn-update-password" @onclick="UpdatePassword">Update Password</button>
+            
+            <div class="two-factor">
+                <div class="toggle-item">
+                    <div class="toggle-info">
+                        <h3>Two-Factor Authentication</h3>
+                        <p>Add an extra layer of security to your account</p>
+                    </div>
+                    <div class="toggle-switch @(twoFactorAuth ? "active" : "")" @onclick="ToggleTwoFactorAuth">
+                        <div class="toggle-slider"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-header">
+                <i class="bi bi-palette"></i>
+                <h2>Appearance</h2>
+            </div>
+            
+            <div class="theme-options">
+                <h3>Theme</h3>
+                <div class="theme-selector">
+                    <div class="theme-option @(theme == "light" ? "active" : "")" @onclick="SetLightTheme">
+                        <div class="theme-preview light-theme"></div>
+                        <span>Light</span>
+                    </div>
+                    <div class="theme-option @(theme == "dark" ? "active" : "")" @onclick="SetDarkTheme">
+                        <div class="theme-preview dark-theme"></div>
+                        <span>Dark</span>
+                    </div>
+                    <div class="theme-option @(theme == "system" ? "active" : "")" @onclick="SetSystemTheme">
+                        <div class="theme-preview system-theme"></div>
+                        <span>System</span>
+                    </div>
+                </div>
+            </div>
+            
+           
+        </div>
+    </div>
+    
+    <div class="action-buttons">
+        <button class="btn-cancel" @onclick="Cancel">Cancel</button>
+        <button class="btn-save" @onclick="SaveChanges">Save Changes</button>
+    </div>
+</div>
+
+<BottomNavBar CurrentPage="settings" />
+
+@code {
+    private bool showNotifications = false;
+    private bool showPassword = false;
+    private bool isLoading = true;
+    private bool isEditing = false;
+    private int teacherId = 0;
+    private string firstName = "";
+    private string lastName = "";
+    private string teacherName => $"{firstName} {lastName}";
+    private string specialization = "";
+    private string email = "";
+    private string phoneNumber = "";
+    private int? yearsOfExperience = 0;
+    private string language = "english";
+    private string timezone = "utc-5";
+    private bool emailNotifications = true;
+    private bool pushNotifications = true;
+    private bool assignmentReminders = true;
+    private bool twoFactorAuth = false;
+    private string theme = "light";
+    private int fontSize = 14;
+    
+    // Password fields
+    private string currentPassword = "";
+    private string newPassword = "";
+    private string confirmPassword = "";
+    
+    private bool hasProfileImage = false;
+    private string profileImageUrl = "";
+    
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        await LoadTeacherData();
+        isLoading = false;
+    }
+    
+    private async Task LoadTeacherData()
+    {
+        try
+        {
+            // Try to get the teacher's ID from localStorage
+            var teacherIdStr = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "currentTeacherId");
+            
+            if (!string.IsNullOrEmpty(teacherIdStr) && int.TryParse(teacherIdStr, out teacherId))
+            {
+                // Get the teacher data from the repository
+                var teacher = await UserRepository.GetAsync(teacherId);
+                
+                if (teacher != null && teacher.Role == "Teacher")
+                {
+                    firstName = teacher.FirstName;
+                    lastName = teacher.LastName;
+                    email = teacher.Email;
+                    phoneNumber = teacher.PhoneNumber ?? "";
+                    specialization = teacher.Specialization ?? "General";
+                    yearsOfExperience = teacher.YearsOfExperience;
+                    
+                    Console.WriteLine($"Loaded teacher: {teacherName}");
+                }
+                else
+                {
+                    Console.WriteLine("Teacher not found or invalid role");
+                    await JSRuntime.ToastrError("Failed to load teacher data. Please login again.");
+                    NavigationManager.NavigateTo("/teacher-login");
+                }
+            }
+            else
+            {
+                // Fallback to localStorage direct values
+                firstName = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "teacherFirstName") ?? "";
+                lastName = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "teacherLastName") ?? "";
+                email = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "teacherEmail") ?? "";
+                
+                if (string.IsNullOrEmpty(firstName) || string.IsNullOrEmpty(lastName))
+                {
+                    Console.WriteLine("Teacher data not found in localStorage");
+                    await JSRuntime.ToastrError("Teacher data not found. Please login again.");
+                    NavigationManager.NavigateTo("/teacher-login");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading teacher data: {ex.Message}");
+            await JSRuntime.ToastrError("Error loading profile data.");
+        }
+    }
+    
+    private void StartEditing()
+    {
+        isEditing = true;
+    }
+    
+    private void CancelEdit()
+    {
+        isEditing = false;
+    }
+    
+    private async Task SaveProfile()
+    {
+        try
+        {
+            if (teacherId > 0)
+            {
+                var teacher = await UserRepository.GetAsync(teacherId);
+                
+                if (teacher != null)
+                {
+                    teacher.FirstName = firstName;
+                    teacher.LastName = lastName;
+                    teacher.Email = email;
+                    teacher.PhoneNumber = phoneNumber;
+                    teacher.Specialization = specialization;
+                    teacher.YearsOfExperience = yearsOfExperience;
+                    
+                    var updatedTeacher = await UserRepository.UpdateAsync(teacher);
+                    
+                    if (updatedTeacher != null)
+                    {
+                        // Update localStorage values
+                        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "teacherFirstName", firstName);
+                        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "teacherLastName", lastName);
+                        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "teacherEmail", email);
+                        
+                        await JSRuntime.ToastrSuccess("Profile updated successfully!");
+                        isEditing = false;
+                    }
+                    else
+                    {
+                        await JSRuntime.ToastrError("Failed to update profile.");
+                    }
+                }
+                else
+                {
+                    await JSRuntime.ToastrError("Teacher data not found. Please login again.");
+                }
+            }
+            else
+            {
+                await JSRuntime.ToastrError("Invalid teacher ID. Please login again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving profile: {ex.Message}");
+            await JSRuntime.ToastrError("Error saving profile data.");
+        }
+    }
+    
+    private async Task UpdatePassword()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(currentPassword))
+            {
+                await JSRuntime.ToastrError("Current password is required.");
+                return;
+            }
+            
+            if (string.IsNullOrWhiteSpace(newPassword))
+            {
+                await JSRuntime.ToastrError("New password is required.");
+                return;
+            }
+            
+            if (newPassword != confirmPassword)
+            {
+                await JSRuntime.ToastrError("New passwords do not match.");
+                return;
+            }
+            
+            if (teacherId > 0)
+            {
+                // Verify current password
+                var user = await UserRepository.LoginAsync(email, currentPassword);
+                
+                if (user != null)
+                {
+                    // Update password
+                    user.Password = BCrypt.Net.BCrypt.HashPassword(newPassword);
+                    var updatedUser = await UserRepository.UpdateAsync(user);
+                    
+                    if (updatedUser != null)
+                    {
+                        // Clear password fields
+                        currentPassword = "";
+                        newPassword = "";
+                        confirmPassword = "";
+                        
+                        await JSRuntime.ToastrSuccess("Password updated successfully!");
+                    }
+                    else
+                    {
+                        await JSRuntime.ToastrError("Failed to update password.");
+                    }
+                }
+                else
+                {
+                    await JSRuntime.ToastrError("Current password is incorrect.");
+                }
+            }
+            else
+            {
+                await JSRuntime.ToastrError("Invalid teacher ID. Please login again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating password: {ex.Message}");
+            await JSRuntime.ToastrError("Error updating password.");
+        }
+    }
+    
+    private void ToggleNotifications()
+    {
+        showNotifications = !showNotifications;
+    }
+    
+    private void TogglePasswordVisibility()
+    {
+        showPassword = !showPassword;
+    }
+    
+    private void ToggleEmailNotifications()
+    {
+        emailNotifications = !emailNotifications;
+    }
+    
+    private void TogglePushNotifications()
+    {
+        pushNotifications = !pushNotifications;
+    }
+    
+    private void ToggleAssignmentReminders()
+    {
+        assignmentReminders = !assignmentReminders;
+    }
+    
+    private void ToggleTwoFactorAuth()
+    {
+        twoFactorAuth = !twoFactorAuth;
+    }
+    
+    private void SetLightTheme()
+    {
+        theme = "light";
+    }
+    
+    private void SetDarkTheme()
+    {
+        theme = "dark";
+    }
+    
+    private void SetSystemTheme()
+    {
+        theme = "system";
+    }
+    
+    private async Task SaveChanges()
+    {
+        // Save appearance and notification settings (these could be saved to localStorage or a user preferences table)
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "teacherLanguage", language);
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "teacherTimezone", timezone);
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "teacherTheme", theme);
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "teacherFontSize", fontSize.ToString());
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "teacherEmailNotifications", emailNotifications.ToString());
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "teacherPushNotifications", pushNotifications.ToString());
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "teacherAssignmentReminders", assignmentReminders.ToString());
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "teacherTwoFactorAuth", twoFactorAuth.ToString());
+        
+        await JSRuntime.ToastrSuccess("Settings saved successfully!");
+    }
+    
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/teacher-dashboard");
+    }
+    
+    private async Task TriggerFileInput()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("triggerFileInput", "profileImageInput");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.ToastrError($"Error opening file dialog: {ex.Message}");
+        }
+    }
+    
+    private async Task OnProfileImageSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file != null)
+            {
+                // Here you would typically:
+                // 1. Validate the file (size, type, etc.)
+                // 2. Upload it to your server or cloud storage
+                // 3. Get back the URL and update the profile
+                
+                // For now, we'll just store it in a data URL for demo
+                var buffer = new byte[file.Size];
+                await file.OpenReadStream().ReadAsync(buffer);
+                var imageBase64 = Convert.ToBase64String(buffer);
+                profileImageUrl = $"data:{file.ContentType};base64,{imageBase64}";
+                hasProfileImage = true;
+                
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.ToastrError($"Error uploading image: {ex.Message}");
+        }
+    }
+} 

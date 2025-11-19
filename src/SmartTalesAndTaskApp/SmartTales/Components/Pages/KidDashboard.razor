@@ -1,0 +1,537 @@
+@page "/kid-dashboard"
+@page "/kid-dashboard/{KidId:int}"
+
+@using Microsoft.AspNetCore.Components;
+@using Microsoft.JSInterop;
+@using System.Collections.Generic;
+@using System.Net.Http;
+@using System.Net.Http.Json;
+@using System.Threading.Tasks;
+@using Microsoft.AspNetCore.Components.Forms;
+@using SmartTales.Repository.IRepository;
+@using SmartTales.Data;
+@using SmartTales.Service;
+@using SmartTales.Model;
+@using SmartTales.Components.Shared;
+@inject AssignmentService AssignmentService
+@inject GradeService GradeService
+
+<div class="kid-dashboard">
+    <!-- Header Section -->
+    <div class="dashboard-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="welcome-section">
+                    <div class="avatar-container">
+                        <div class="avatar">
+                            <img src="images/logokids-removebg-preview.png" alt="@kidName" />
+                            <div class="status-indicator online"></div>
+                        </div>
+                    </div>
+                    <div class="welcome-text">
+                        <h1 class="greeting">
+                            <span class="wave">👋</span>
+                            Welcome back, @kidName!
+                        </h1>
+                        <p class="subtitle">Ready for another amazing learning adventure?</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-ghost notification-btn" @onclick="ToggleNotifications">
+                        <i class="fas fa-bell"></i>
+                        @if (hasNotifications)
+                        {
+                            <span class="notification-dot"></span>
+                        }
+                    </button>
+                    <button class="btn btn-ghost settings-btn" @onclick="NavigateToSettings">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="dashboard-content">
+        <div class="container">
+            <!-- Progress Section -->
+            <div class="progress-section">
+                <div class="progress-card">
+                    <div class="progress-header">
+                        <h3>Your Learning Journey</h3>
+                        <div class="progress-percentage">@progressPercentage%</div>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: @progressPercentage%"></div>
+                        </div>
+                        <div class="progress-labels">
+                            <span>Beginner</span>
+                            <span>Expert</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card completed-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-number">@completedAssignments</div>
+                        <div class="stat-label">Completed Tasks</div>
+                    </div>
+                    <div class="stat-trend up">
+                        <i class="fas fa-arrow-up"></i>
+                    </div>
+                </div>
+
+                <div class="stat-card pending-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-number">@pendingAssignments</div>
+                        <div class="stat-label">Pending Tasks</div>
+                    </div>
+                    <div class="stat-trend">
+                        <i class="fas fa-minus"></i>
+                    </div>
+                </div>
+
+                <div class="stat-card points-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-star"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-number">@totalPoints</div>
+                        <div class="stat-label">Total Points</div>
+                    </div>
+                    <div class="stat-trend up">
+                        <i class="fas fa-arrow-up"></i>
+                    </div>
+                </div>
+
+                <div class="stat-card streak-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-fire"></i>
+                    </div>
+                    <div class="stat-content">
+                        <div class="stat-number">7</div>
+                        <div class="stat-label">Day Streak</div>
+                    </div>
+                    <div class="stat-trend up">
+                        <i class="fas fa-arrow-up"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="actions-section">
+                <h3 class="section-title">
+                    <i class="fas fa-rocket"></i>
+                    Quick Actions
+                </h3>
+                <div class="actions-grid">
+                    <button class="action-card assignments-action" @onclick="NavigateToAssignments">
+                        <div class="action-icon">
+                            <i class="fas fa-tasks"></i>
+                        </div>
+                        <div class="action-content">
+                            <h4>Assignments</h4>
+                            <p>View and complete your tasks</p>
+                        </div>
+                        <div class="action-arrow">
+                            <i class="fas fa-chevron-right"></i>
+                        </div>
+                    </button>
+
+                    <button class="action-card marks-action" @onclick="NavigateToMarks">
+                        <div class="action-icon">
+                            <i class="fas fa-medal"></i>
+                        </div>
+                        <div class="action-content">
+                            <h4>My Grades</h4>
+                            <p>Check your scores and feedback</p>
+                        </div>
+                        <div class="action-arrow">
+                            <i class="fas fa-chevron-right"></i>
+                        </div>
+                    </button>
+
+                    <button class="action-card chat-action" @onclick="OpenAIChat">
+                        <div class="action-icon">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="action-content">
+                            <h4>AI Helper</h4>
+                            <p>Get help with your studies</p>
+                        </div>
+                        <div class="action-arrow">
+                            <i class="fas fa-chevron-right"></i>
+                        </div>
+                    </button>
+
+                    <button class="action-card stories-action" @onclick="NavigateToStories">
+                        <div class="action-icon">
+                            <i class="fas fa-book-open"></i>
+                        </div>
+                        <div class="action-content">
+                            <h4>Stories</h4>
+                            <p>Read amazing adventures</p>
+                        </div>
+                        <div class="action-arrow">
+                            <i class="fas fa-chevron-right"></i>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Recent Grades Section -->
+            <div class="grades-section">
+                <h3 class="section-title">
+                    <i class="fas fa-trophy"></i>
+                    Recent Achievements
+                </h3>
+                @if (recentGrades.Any())
+                {
+                    <div class="grades-grid">
+                        @foreach (var grade in recentGrades)
+                        {
+                            <div class="grade-card">
+                                <div class="grade-header">
+                                    <div class="grade-info">
+                                        <h4>@grade.AssignmentTitle</h4>
+                                        <p class="grade-subject">@grade.Class</p>
+                                    </div>
+                                    <div class="grade-score" style="background: @GetGradeColor(grade.GradeDisplay)">
+                                        @grade.GradeDisplay
+                                    </div>
+                                </div>
+                                @if (!string.IsNullOrEmpty(grade.Feedback))
+                                {
+                                    <div class="grade-feedback">
+                                        <i class="fas fa-comment"></i>
+                                        <p>@grade.Feedback</p>
+                                    </div>
+                                }
+                                <div class="grade-footer">
+                                    <span class="grade-percentage">@grade.PercentageDisplay</span>
+                                    <span class="grade-date">@grade.GradedTimeAgo</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="section-footer">
+                        <button class="btn btn-outline" @onclick="NavigateToMarks">
+                            <i class="fas fa-eye"></i>
+                            <span>View All Grades</span>
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <i class="fas fa-medal"></i>
+                        </div>
+                        <h4>No grades yet</h4>
+                        <p>Your achievements will appear here once your teacher grades your assignments.</p>
+                        <button class="btn btn-primary" @onclick="NavigateToAssignments">
+                            <i class="fas fa-tasks"></i>
+                            <span>View Assignments</span>
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-navigation">
+        <div class="nav-container">
+            <button class="nav-item @(currentPage == "dashboard" ? "active" : "")" @onclick="NavigateToDashboard">
+                <div class="nav-icon">
+                    <i class="fas fa-home"></i>
+                </div>
+                <span class="nav-label">Home</span>
+            </button>
+
+            <button class="nav-item @(currentPage == "assignments" ? "active" : "")" @onclick="NavigateToAssignments">
+                <div class="nav-icon">
+                    <i class="fas fa-tasks"></i>
+                </div>
+                <span class="nav-label">Tasks</span>
+            </button>
+
+            <button class="nav-item @(currentPage == "marks" ? "active" : "")" @onclick="NavigateToMarks">
+                <div class="nav-icon">
+                    <i class="fas fa-medal"></i>
+                </div>
+                <span class="nav-label">Grades</span>
+            </button>
+
+            <button class="nav-item @(currentPage == "notifications" ? "active" : "")" @onclick="ToggleNotifications">
+                <div class="nav-icon">
+                    <i class="fas fa-bell"></i>
+                    @if (hasNotifications)
+                    {
+                        <span class="notification-dot"></span>
+                    }
+                </div>
+                <span class="nav-label">Alerts</span>
+            </button>
+
+            <button class="nav-item @(currentPage == "setting" ? "active" : "")" @onclick="NavigateToSettings">
+                <div class="nav-icon">
+                    <i class="fas fa-cog"></i>
+                </div>
+                <span class="nav-label">Settings</span>
+            </button>
+        </div>
+    </nav>
+</div>
+
+@if (showNotifications)
+{
+    <NotificationsPopup />
+}
+
+@code {
+    [Inject] IJSRuntime JSRuntime { get; set; }
+    [Inject] NavigationManager NavigationManager { get; set; }
+    [Inject] IUserRepository UserRepository { get; set; }
+
+    [Parameter]
+    public int KidId { get; set; } = 0;
+
+    private string kidName = "Loading...";
+    private int progressPercentage = 0;
+    private int completedAssignments = 0;
+    private int pendingAssignments = 0;
+    private int totalPoints = 0;
+    private string currentPage = "dashboard";
+    private int currentKidId = 0;
+    private bool showNotifications = false;
+    private bool hasNotifications = true;
+
+    private List<ActivityItem> recentActivities = new List<ActivityItem>();
+    private List<GradeViewModel> recentGrades = new List<GradeViewModel>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // For demo, we'll use the parameter to determine which kid is logged in
+        if (KidId > 0)
+        {
+            // If a specific KidId was provided in the URL, use it
+            currentKidId = KidId;
+            Console.WriteLine($"Using kid ID from URL: {currentKidId}");
+        }
+        else
+        {
+            try
+            {
+                // Get the currently logged-in kid's ID from localStorage
+                var storedKidId = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "currentKidId");
+
+                if (!string.IsNullOrEmpty(storedKidId) && int.TryParse(storedKidId, out int parsedId))
+                {
+                    currentKidId = parsedId;
+                    Console.WriteLine($"Using kid ID from localStorage: {currentKidId}");
+                }
+                else
+                {
+                    // No kid ID in localStorage, redirect to login
+                    Console.WriteLine("No kid ID found in localStorage, redirecting to login");
+                    NavigationManager.NavigateTo("/kid-login");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error retrieving kid ID from localStorage: {ex.Message}");
+                NavigationManager.NavigateTo("/kid-login");
+                return;
+            }
+        }
+
+        await LoadKidData();
+        await LoadActivities();
+        await LoadAssignmentData();
+        await LoadGradeData();
+    }
+
+    private async Task LoadKidData()
+    {
+        try
+        {
+            if (currentKidId <= 0)
+            {
+                Console.WriteLine("Invalid kid ID: " + currentKidId);
+                return;
+            }
+
+            // Get the specific kid by ID
+            var kid = await UserRepository.GetAsync(currentKidId);
+
+            if (kid != null)
+            {
+                kidName = $"{kid.FirstName} {kid.LastName}";
+                progressPercentage = kid.ProgressPercentage ?? 0;
+                // We'll load assignment counts from AssignmentService instead
+                
+                Console.WriteLine($"Dashboard loaded for: {kidName} (ID: {currentKidId})");
+            }
+            else
+            {
+                Console.WriteLine($"Kid with ID {currentKidId} not found");
+                kidName = "Kid Not Found";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading kid data: {ex.Message}");
+        }
+    }
+
+    private async Task LoadActivities()
+    {
+        // This would ideally be fetched from a dedicated activity repository
+        // For now, we'll use sample data
+        recentActivities = new List<ActivityItem>
+        {
+            new ActivityItem { Icon = "📚", Text = "Completed Math Assignment", Time = "2 hours ago" },
+            new ActivityItem { Icon = "⭐", Text = "Earned 50 points", Time = "Yesterday" },
+            new ActivityItem { Icon = "📝", Text = "Started English Homework", Time = "2 days ago" }
+        };
+    }
+
+    private async Task LoadAssignmentData()
+    {
+        try
+        {
+            // Get all assignments
+            var assignments = await AssignmentService.GetAllAssignments();
+
+            // Filter to only published assignments
+            var publishedAssignments = assignments.Where(a => a.IsPublished).ToList();
+
+            // Count assignments submitted by this student
+            var studentSubmissions = assignments.Where(a => a.StudentId == currentKidId && a.IsSubmitted).ToList();
+            completedAssignments = studentSubmissions.Count;
+
+            // Count pending assignments (published but not submitted by this student)
+            var submittedAssignmentIds = studentSubmissions.Select(a => a.AssignmentId).ToHashSet();
+            pendingAssignments = publishedAssignments.Count(a => !submittedAssignmentIds.Contains(a.AssignmentId));
+
+            // Calculate total points from graded assignments
+            var studentGrades = await GradeService.GetStudentGradesWithDetailsAsync(currentKidId);
+            var gradeSum = studentGrades.Where(g => g.NumericalGrade.HasValue).Sum(g => g.NumericalGrade.Value);
+            totalPoints = (int)gradeSum;
+
+            Console.WriteLine($"Loaded {completedAssignments} completed, {pendingAssignments} pending assignments, {totalPoints} total points");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading assignment data: {ex.Message}");
+        }
+    }
+
+    private async Task LoadGradeData()
+    {
+        try
+        {
+            // Get recent grades for this student (last 3)
+            var allGrades = await GradeService.GetStudentGradesWithDetailsAsync(currentKidId);
+            recentGrades = allGrades.Take(3).ToList();
+
+            Console.WriteLine($"Loaded {recentGrades.Count} recent grades for student {currentKidId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading grade data: {ex.Message}");
+            recentGrades = new List<GradeViewModel>();
+        }
+    }
+
+    private void OpenAIChat()
+    {
+        NavigationManager.NavigateTo("/chatbot");
+    }
+
+    private void NavigateToDashboard()
+    {
+        NavigationManager.NavigateTo("/kid-dashboard");
+    }
+    
+    private void NavigateToAssignments()
+    {
+        // Navigate to assignments page
+        Console.WriteLine("Navigating to assignments page");
+        NavigationManager.NavigateTo("/assignments", forceLoad: true);
+    }
+    
+    private void NavigateToMarks()
+    {
+        NavigationManager.NavigateTo("/marks");
+    }
+    
+    private void NavigateToSettings()
+    {
+        NavigationManager.NavigateTo("/setting");
+    }
+
+    private void NavigateToStories()
+    {
+        NavigationManager.NavigateTo("/stories");
+    }
+
+    private void ToggleNotifications()
+    {
+        showNotifications = !showNotifications;
+        currentPage = "notifications";
+    }
+
+    private string GetGradeColor(string grade)
+    {
+        return grade.ToUpper() switch
+        {
+            "A" or "A+" => "linear-gradient(135deg, var(--color-success-500), var(--color-success-600))",
+            "B" or "B+" => "linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))",
+            "C" or "C+" => "linear-gradient(135deg, var(--color-warning-500), var(--color-warning-600))",
+            "D" or "F" => "linear-gradient(135deg, var(--color-error-500), var(--color-error-600))",
+            _ => "linear-gradient(135deg, var(--color-neutral-500), var(--color-neutral-600))"
+        };
+    }
+
+    private async Task Logout()
+    {
+        try
+        {
+            // Clear kid data from localStorage
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "currentKidId");
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "kidFirstName");
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "kidLastName");
+
+            // Navigate to the login page
+            NavigationManager.NavigateTo("/kid-login");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during logout: {ex.Message}");
+        }
+    }
+
+    private class ActivityItem
+    {
+        public string Icon { get; set; } = string.Empty;
+        public string Text { get; set; } = string.Empty;
+        public string Time { get; set; } = string.Empty;
+    }
+}
+
+<link href="css/kid-dashboard.css" rel="stylesheet" />
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />

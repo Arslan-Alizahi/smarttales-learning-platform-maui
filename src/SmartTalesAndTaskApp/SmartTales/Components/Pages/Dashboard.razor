@@ -1,0 +1,427 @@
+@page "/teacher-dashboard"
+@using SmartTales.Service
+@using SmartTales.Model
+@using SmartTales.Data
+@using SmartTales.Repository.IRepository
+@inject AssignmentService AssignmentService
+@inject GradeService GradeService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IUserRepository UserRepository
+<SmartTales.Components.Shared.Header Title="" />
+
+<div class="dashboard-container">
+    <div class="header">
+        <div class="header-content">
+            <h1>Teacher Dashboard</h1>
+            <p class="welcome-message">Welcome, @teacherName! <button class="logout-btn" @onclick="LogOut"><i class="bi bi-box-arrow-right"></i> Log Out</button></p>
+        </div>
+        <div class="header-actions">
+            <button class="settings-btn" @onclick="NavigateToSettings">
+                <i class="bi bi-gear"></i>
+            </button>
+            <div class="notification-icon" @onclick="ToggleNotifications">
+                <i class="bi bi-bell-fill"></i>
+                <span class="notification-badge">3</span>
+            </div>
+        </div>
+    </div>
+
+    @if (showNotifications)
+    {
+        <NotificationsPopup />
+    }
+
+    <div class="stats-container">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="bi bi-file-earmark-text"></i>
+            </div>
+            <div class="stat-content">
+                <h3>@pendingAssignments</h3>
+                <p>Student Submissions</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="bi bi-check-circle"></i>
+            </div>
+            <div class="stat-content">
+                <h3>@gradedAssignments</h3>
+                <p>Graded Submissions</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="bi bi-people"></i>
+            </div>
+            <div class="stat-content">
+                <h3>@activeStudents</h3>
+                <p>Active Students</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="recent-section">
+        <div class="section-header">
+            <h2>Recent Submissions</h2>
+            <button class="view-all-btn" @onclick="ViewAllSubmissions">View All</button>
+        </div>
+        <div class="recent-list">
+            @foreach (var item in recentSubmissions)
+            {
+                <div class="recent-item">
+                    <div class="student-info">
+                        <div class="student-avatar">
+                            <span>@item.StudentInitials</span>
+                        </div>
+                        <div class="submission-details">
+                            <h4>@item.StudentName</h4>
+                            <p>@item.AssignmentName</p>
+                        </div>
+                    </div>
+                    <div class="submission-meta">
+                        <div class="submission-time">
+                            <span>@item.SubmissionTime</span>
+                        </div>
+                        <div class="grade-status @(item.IsGraded ? "graded" : "pending")" title="@(item.IsGraded ? $"Grade: {item.GradeDisplay}" : "Awaiting grade")">
+                            <span>@item.GradeDisplay</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Quick Grading Section -->
+    <div class="quick-grading-section">
+        <div class="section-header">
+            <h2>Quick Grading</h2>
+            <button class="view-all-btn" @onclick="ViewAllSubmissions">Grade All</button>
+        </div>
+        <div class="grading-list">
+            @if (pendingAssignments > 0)
+            {
+                <p class="grading-summary">
+                    <i class="bi bi-exclamation-circle"></i>
+                    You have @pendingAssignments ungraded submission(s) waiting for review.
+                </p>
+                <button class="btn-primary grade-all-btn" @onclick="ViewAllSubmissions">
+                    <i class="bi bi-pencil-square"></i> Start Grading
+                </button>
+            }
+            else
+            {
+                <p class="no-pending">
+                    <i class="bi bi-check-circle"></i>
+                    All submissions are graded! Great work!
+                </p>
+            }
+        </div>
+    </div>
+
+    <div class="upcoming-section">
+        <div class="section-header">
+            <h2>Upcoming Deadlines</h2>
+            <button class="add-new-btn" @onclick="CreateNewAssignment">
+                <i class="bi bi-plus"></i> Add
+            </button>
+        </div>
+        <div class="deadline-list">
+            @foreach (var deadline in upcomingDeadlines)
+            {
+                <div class="deadline-item">
+                    <div class="deadline-date">
+                        <span class="date">@deadline.Date</span>
+                        <span class="month">@deadline.Month</span>
+                    </div>
+                    <div class="deadline-details">
+                        <h4>@deadline.Title</h4>
+                        <p>@deadline.Class</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<BottomNavBar CurrentPage="dashboard" />
+
+<style>
+    .submission-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.25rem;
+    }
+
+    .grade-status {
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+
+    .grade-status.graded {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .grade-status.pending {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .quick-grading-section {
+        margin-bottom: 2rem;
+    }
+
+    .grading-list {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+    }
+
+    .grading-summary {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        color: #856404;
+        font-weight: 500;
+    }
+
+    .grade-all-btn {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0 auto;
+        font-weight: 500;
+        transition: background 0.2s ease;
+    }
+
+    .grade-all-btn:hover {
+        background: #0056b3;
+    }
+
+    .no-pending {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        color: #155724;
+        font-weight: 500;
+        margin: 0;
+    }
+</style>
+
+@code {
+    private bool showNotifications = false;
+    private string teacherName = "Teacher"; // Default name, will be updated
+    private int pendingAssignments = 0;
+    private int gradedAssignments = 0;
+    private int activeStudents = 0;
+    
+    private List<RecentSubmission> recentSubmissions = new List<RecentSubmission>();
+    private List<DeadlineItem> upcomingDeadlines = new List<DeadlineItem>();
+    private List<GradeViewModel> studentSubmissions = new List<GradeViewModel>();
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTeacherName();
+        await LoadAssignmentData();
+        await LoadActiveStudents();
+    }
+    
+    private async Task LoadTeacherName()
+    {
+        try
+        {
+            // Try to get the teacher's ID from localStorage
+            var teacherId = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "currentTeacherId");
+            
+            if (!string.IsNullOrEmpty(teacherId) && int.TryParse(teacherId, out int id))
+            {
+                // Get the teacher data from the repository
+                var teacher = await UserRepository.GetAsync(id);
+                
+                if (teacher != null && teacher.Role == "Teacher")
+                {
+                    teacherName = $"{teacher.FirstName} {teacher.LastName}";
+                    Console.WriteLine($"Loaded teacher name: {teacherName}");
+                }
+                else
+                {
+                    Console.WriteLine("Teacher not found or invalid role");
+                }
+            }
+            else
+            {
+                // Try getting the name directly from localStorage as fallback
+                var firstName = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "teacherFirstName");
+                var lastName = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "teacherLastName");
+                
+                if (!string.IsNullOrEmpty(firstName) && !string.IsNullOrEmpty(lastName))
+                {
+                    teacherName = $"{firstName} {lastName}";
+                    Console.WriteLine($"Loaded teacher name from localStorage: {teacherName}");
+                }
+                else
+                {
+                    Console.WriteLine("Teacher name not found in localStorage");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading teacher name: {ex.Message}");
+        }
+    }
+    
+    private async Task LoadAssignmentData()
+    {
+        try
+        {
+            // Get submissions with grading status
+            var submissionsWithGrades = await GradeService.GetSubmissionsWithGradingStatusAsync();
+
+            // Count pending (ungraded) and graded submissions
+            pendingAssignments = submissionsWithGrades.Count(s => !s.IsGraded);
+            gradedAssignments = submissionsWithGrades.Count(s => s.IsGraded);
+
+            // Get recent submissions (last 5) - prioritize ungraded ones
+            recentSubmissions = submissionsWithGrades
+                .OrderBy(s => s.IsGraded) // Ungraded first
+                .ThenByDescending(s => s.SubmissionDate)
+                .Take(5)
+                .Select(s => new RecentSubmission
+                {
+                    StudentName = s.StudentName,
+                    StudentInitials = s.StudentInitials,
+                    AssignmentName = s.AssignmentTitle,
+                    SubmissionTime = s.IsGraded ? $"Graded {s.GradedTimeAgo}" : s.SubmissionDate?.ToString("MMM dd") ?? "Recently",
+                    IsGraded = s.IsGraded,
+                    GradeDisplay = s.IsGraded ? s.GradeDisplay : "Pending"
+                })
+                .ToList();
+
+            // Get upcoming deadlines from published assignments (not submissions)
+            var allAssignments = await AssignmentService.GetPublishedAssignments();
+            upcomingDeadlines = allAssignments
+                .Where(a => a.DueDate > DateTime.Now)
+                .OrderBy(a => a.DueDate)
+                .Take(3)
+                .Select(a => new DeadlineItem
+                {
+                    Date = a.DueDate.Day.ToString(),
+                    Month = a.DueDate.ToString("MMM"),
+                    Title = a.Title,
+                    Class = a.Class
+                })
+                .ToList();
+
+            Console.WriteLine($"Loaded {studentSubmissions.Count} student submissions and {upcomingDeadlines.Count} upcoming deadlines");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading assignment data: {ex.Message}");
+            // Initialize with empty data on error
+            recentSubmissions = new List<RecentSubmission>();
+            upcomingDeadlines = new List<DeadlineItem>();
+            pendingAssignments = 0;
+            gradedAssignments = 0;
+        }
+    }
+    
+    private async Task LoadActiveStudents()
+    {
+        try
+        {
+            // Get all users and count those with "Kid" role
+            var allUsers = await UserRepository.GetAllAsync();
+            activeStudents = allUsers.Count(u => u.Role == "Kid");
+            Console.WriteLine($"Loaded {activeStudents} active students");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading active students count: {ex.Message}");
+            activeStudents = 0;
+        }
+    }
+    
+    private void ToggleNotifications()
+    {
+        showNotifications = !showNotifications;
+    }
+    
+    private void ViewAllSubmissions()
+    {
+        NavigationManager.NavigateTo("/submitted-assignments");
+    }
+
+    private async Task RefreshSubmissions()
+    {
+        await LoadAssignmentData();
+        StateHasChanged();
+    }
+
+    private void CreateNewAssignment()
+    {
+        NavigationManager.NavigateTo("/upload-assignment");
+    }
+    
+    private void NavigateToSettings()
+    {
+        NavigationManager.NavigateTo("/SettingsT");
+    }
+    
+    private async Task LogOut()
+    {
+        try
+        {
+            // Clear teacher data from localStorage
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "currentTeacherId");
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "teacherFirstName");
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "teacherLastName");
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "teacherEmail");
+            await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "teacherRole");
+            
+            Console.WriteLine("Teacher logged out");
+            
+            // Navigate to the login page
+            NavigationManager.NavigateTo("/teacher-login");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during logout: {ex.Message}");
+        }
+    }
+    
+    private class RecentSubmission
+    {
+        public string StudentName { get; set; } = string.Empty;
+        public string StudentInitials { get; set; } = string.Empty;
+        public string AssignmentName { get; set; } = string.Empty;
+        public string SubmissionTime { get; set; } = string.Empty;
+        public bool IsGraded { get; set; }
+        public string GradeDisplay { get; set; } = string.Empty;
+    }
+    
+    private class DeadlineItem
+    {
+        public string Date { get; set; }
+        public string Month { get; set; }
+        public string Title { get; set; }
+        public string Class { get; set; }
+    }
+} 

@@ -1,0 +1,241 @@
+﻿@page "/ocr"
+
+@using SmartTalesAndTaskApp.Services
+@* @using CommunityToolkit.Maui.Views
+@using Microsoft.Maui.Controls *@
+@inject OcrService OcrService
+
+
+
+
+<style>
+    .container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 50%;
+        width: 100%;
+        /* background-color: #f8f9fa; */
+    }
+
+    .upload-box {
+        width: 100%;
+        padding: 20px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }
+
+    .upload-area {
+        border: 2px dashed #007bff;
+        border-radius: 10px;
+        padding: 30px;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+        .upload-area:hover {
+            background: #e3f2fd;
+        }
+
+    .upload-icon {
+        width: 50px;
+        margin-bottom: 10px;
+    }
+
+    .upload-preview {
+        width: 60vw;
+        margin-bottom: 10px;
+    }
+
+    .upload-text {
+        font-size: 18px;
+        font-weight: bold;
+        color: #007bff;
+    }
+
+    .sub-text {
+        font-size: 14px;
+        color: #6c757d;
+        margin-bottom: 15px;
+    }
+
+    .browse-btn {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+        .browse-btn:hover {
+            background: #0056b3;
+        }
+</style>
+
+<div class="container">
+    <div class="upload-box">
+        @if (string.IsNullOrEmpty(@imagePath) || string.IsNullOrEmpty(@previewPath))
+        {
+            <div class="upload-area"
+                 @ondrop="HandleFileDrop"
+                 @ondragover="HandleDragOver">
+                <img src="images/cloud_upload_icon.png" alt="Upload Icon" class="upload-icon" />
+                <p class="upload-text">DRAG IMAGE HERE</p>
+                <p class="sub-text">Drag and drop image here, or browse your device</p>
+                <input type="file" id="fileInput" hidden />
+                <button class="btn btn-primary" @onclick="PickImage">Pick Image</button>
+            </div>
+        }
+        else
+        {
+            <div class="upload-area row">
+                <div class="col"><img class="upload-preview" src="@previewPath" alt="Uploaded Image" /></div>
+                <div class="row gap-1">
+                    <button class="btn btn-danger col" @onclick="RemoveImage">Remove</button>
+                    <button class="btn btn-primary col" @onclick="PickImage">Pick Another</button>
+                    <button class="btn btn-primary col" @onclick="ExtractText">Extract Text</button>
+                    <button class="btn btn-primary col" @onclick="ConvertImageToAudio">Convert to Audio</button>
+                </div>
+            </div>
+        }
+
+    </div>
+
+</div>
+<br />
+@if (loader == true)
+{
+    <p>Converting Image to Speech. Please wait a while!</p>
+}
+@if (AudioUrlBase64 != null && loader == false)
+{
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-4">
+                <audio controls>
+                    <source src="@AudioUrlBase64" type="audio/wav">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+            <div class="col-md-2 align-items-baseline">
+                <button class="btn btn-primary col" @onclick="ClearAudioSource">X</button>
+
+            </div>
+        </div>
+
+    </div>
+
+}
+
+
+
+@code {
+    private string imagePath = string.Empty;
+    private string previewPath = string.Empty;
+    private string expectedText = string.Empty;
+    private Stream? AudioUrl = null;
+    private ElementReference audioPlayer;
+    private string? AudioUrlBase64 = null;
+    private bool loader = false;
+
+
+    private void RemoveImage()
+    {
+        this.imagePath = "";
+        this.previewPath = "";
+
+        this.expectedText = "";
+    }
+
+    private void ClearAudioSource()
+    {
+        this.AudioUrlBase64 = null;
+    }
+
+    private async Task PickImage()
+    {
+        // Hiding Expected Text Area
+        this.expectedText = "";
+
+        var result = await FilePicker.PickAsync(new PickOptions
+            {
+                FileTypes = FilePickerFileType.Images
+            });
+
+        if (result != null)
+        {
+            imagePath = result.FullPath;
+
+            // Making image preview available
+            byte[] imageBytes = File.ReadAllBytes(result.FullPath);
+            string base64Image = Convert.ToBase64String(imageBytes);
+            previewPath = $"data:image/png;base64,{base64Image}"; // Convert to Base64
+        }
+
+    }
+
+    private async Task ExtractText()
+    {
+        if (!string.IsNullOrWhiteSpace(imagePath))
+        {
+            expectedText = await OcrService.ExtractTextFromImageAsync(imagePath);
+        }
+
+    }
+
+    private async Task ConvertImageToAudio()
+    {
+        loader = true;
+        if (!string.IsNullOrWhiteSpace(imagePath))
+        {
+            var audioStream = await OcrService.ConvertImageToAudio(imagePath);
+            if (audioStream != null)
+            {
+                using var ms = new MemoryStream();
+                await audioStream.CopyToAsync(ms);
+                var audioBytes = ms.ToArray();
+                var base64 = Convert.ToBase64String(audioBytes);
+                AudioUrlBase64 = $"data:audio/wav;base64,{base64}";
+
+                loader = false;
+            }
+            else
+            {
+                AudioUrlBase64 = null;
+                loader = false;
+            }
+        }
+
+    }
+
+
+    private async Task HandleFileDrop(DragEventArgs e)
+    {
+        if (e.DataTransfer?.Items.Length > 0)
+        {
+            imagePath = e.DataTransfer.Files[0];
+
+            var file = e.DataTransfer.Items[0] as IBrowserFile;
+            var filePath = file.Name;
+            string base64Image = string.Empty;
+
+            if (file != null)
+            {
+                var buffer = new byte[file.Size];
+                await file.OpenReadStream().ReadAsync(buffer);
+                previewPath = $"data:image/png;base64,{Convert.ToBase64String(buffer)}";
+            }
+        }
+    }
+
+    private void HandleDragOver(DragEventArgs e)
+    {
+        // NOTE: In Blazor Hybrid, PreventDefault() is NOT available, but it's also NOT needed
+    }
+
+
+}

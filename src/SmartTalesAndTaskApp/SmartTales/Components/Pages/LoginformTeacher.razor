@@ -1,0 +1,234 @@
+﻿@page "/teacher-login"
+@inject IUserRepository _userRepository
+@inject NavigationManager Navigation
+@inject IJSRuntime _JS
+@using System.ComponentModel.DataAnnotations
+
+<div class="auth-page teacher-theme">
+    <!-- Background Elements -->
+    <div class="auth-background">
+        <div class="bg-pattern"></div>
+        <div class="floating-elements">
+            <div class="element element-1">📚</div>
+            <div class="element element-2">✏️</div>
+            <div class="element element-3">🍎</div>
+            <div class="element element-4">🎓</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="auth-container">
+            <!-- Back Button -->
+            <div class="auth-header">
+                <a href="login" class="back-btn">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>Back to Login Options</span>
+                </a>
+            </div>
+
+            <!-- Login Form -->
+            <div class="auth-card">
+                <div class="auth-card-header">
+                    <div class="auth-logo">
+                        <div class="logo-bg teacher-bg">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                        </div>
+                    </div>
+                    <h1 class="auth-title">Welcome Back, Educator!</h1>
+                    <p class="auth-subtitle">Ready to inspire and educate your students?</p>
+                </div>
+
+                <div class="auth-card-body">
+                    <EditForm Model="LoginModel" OnValidSubmit="HandleLogin" class="auth-form">
+                        <DataAnnotationsValidator />
+
+                        @if (showValidationErrors)
+                        {
+                            <div class="form-errors">
+                                <ValidationSummary />
+                            </div>
+                        }
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-envelope"></i>
+                                Email Address
+                            </label>
+                            <InputText class="@($"form-control {GetFieldCssClass(nameof(LoginModel.Email))}")"
+                                      @bind-Value="LoginModel.Email"
+                                      type="email"
+                                      placeholder="Enter your email address"
+                                      @onfocus="() => ClearFieldError(nameof(LoginModel.Email))" />
+                            <ValidationMessage For="@(() => LoginModel.Email)" class="form-error" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-lock"></i>
+                                Password
+                            </label>
+                            <div class="password-input-group">
+                                <InputText class="@($"form-control {GetFieldCssClass(nameof(LoginModel.Password))}")"
+                                          @bind-Value="LoginModel.Password"
+                                          type="@(showPassword ? "text" : "password")"
+                                          placeholder="Enter your password"
+                                          @onfocus="() => ClearFieldError(nameof(LoginModel.Password))" />
+                                <button type="button" class="password-toggle" @onclick="TogglePasswordVisibility">
+                                    <i class="fas @(showPassword ? "fa-eye-slash" : "fa-eye")"></i>
+                                </button>
+                            </div>
+                            <ValidationMessage For="@(() => LoginModel.Password)" class="form-error" />
+                        </div>
+
+                        <button type="submit" class="btn btn-secondary btn-xl auth-submit-btn" disabled="@isLoading">
+                            @if (isLoading)
+                            {
+                                <div class="loading-spinner"></div>
+                                <span>Logging in...</span>
+                            }
+                            else
+                            {
+                                <i class="fas fa-graduation-cap"></i>
+                                <span>Access Classroom</span>
+                            }
+                        </button>
+                    </EditForm>
+                </div>
+
+                <div class="auth-card-footer">
+                    <div class="auth-footer-links">
+                        <button class="forgot-password-btn" @onclick="ShowForgotPassword">
+                            <i class="fas fa-key"></i>
+                            Forgot Password?
+                        </button>
+                    </div>
+                    <p class="auth-footer-text">
+                        New to Smart Tales?
+                        <a href="register" class="auth-link">Create Account</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Forgot Password Modal -->
+<ForgotPasswordModal IsVisible="showForgotPasswordModal" OnClose="CloseForgotPasswordModal" />
+
+@code {
+    private class LoginViewModel
+    {
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Please enter a valid email address")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required")]
+        [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
+        public string Password { get; set; } = string.Empty;
+    }
+
+    private LoginViewModel LoginModel { get; set; } = new();
+    private bool isLoading = false;
+    private bool showPassword = false;
+    private bool showValidationErrors = false;
+    private Dictionary<string, bool> fieldErrors = new();
+    private bool showForgotPasswordModal = false;
+
+    private void TogglePasswordVisibility()
+    {
+        showPassword = !showPassword;
+    }
+
+    private string GetFieldCssClass(string fieldName)
+    {
+        if (fieldErrors.ContainsKey(fieldName) && fieldErrors[fieldName])
+            return "error";
+        return "";
+    }
+
+    private void ClearFieldError(string fieldName)
+    {
+        if (fieldErrors.ContainsKey(fieldName))
+            fieldErrors[fieldName] = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleLogin()
+    {
+        showValidationErrors = true;
+
+        if (!ValidateForm())
+        {
+            await _JS.ToastrError("Please fix the errors and try again.");
+            return;
+        }
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var user = await _userRepository.LoginAsync(LoginModel.Email, LoginModel.Password);
+
+            if (user == null)
+            {
+                fieldErrors[nameof(LoginModel.Email)] = true;
+                fieldErrors[nameof(LoginModel.Password)] = true;
+                await _JS.ToastrError("Invalid email or password. Please check your credentials and try again.");
+                return;
+            }
+
+            if (user.Role != "Teacher")
+            {
+                await _JS.ToastrError("This login is for Teachers only. Please use the appropriate login page for your role.");
+                return;
+            }
+
+            // Store teacher information in localStorage
+            await _JS.InvokeVoidAsync("localStorage.setItem", "currentTeacherId", user.Id.ToString());
+            await _JS.InvokeVoidAsync("localStorage.setItem", "teacherFirstName", user.FirstName);
+            await _JS.InvokeVoidAsync("localStorage.setItem", "teacherLastName", user.LastName);
+            await _JS.InvokeVoidAsync("localStorage.setItem", "teacherEmail", user.Email);
+            await _JS.InvokeVoidAsync("localStorage.setItem", "teacherRole", user.Role);
+
+            await _JS.ToastrSuccess($"Welcome back, {user.FirstName}! Ready to inspire your students?");
+
+            await Task.Delay(1000);
+            Navigation.NavigateTo("/teacher-dashboard");
+        }
+        catch (BCrypt.Net.SaltParseException)
+        {
+            await _JS.ToastrError("There's an issue with your account. Please contact support or try registering again.");
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Something went wrong. Please try again later.");
+            Console.WriteLine($"Login error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private bool ValidateForm()
+    {
+        var context = new ValidationContext(LoginModel);
+        var results = new List<ValidationResult>();
+        return Validator.TryValidateObject(LoginModel, context, results, true);
+    }
+
+    private void ShowForgotPassword()
+    {
+        showForgotPasswordModal = true;
+    }
+
+    private void CloseForgotPasswordModal()
+    {
+        showForgotPasswordModal = false;
+    }
+}
+
+<link href="css/auth.css" rel="stylesheet" />
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />

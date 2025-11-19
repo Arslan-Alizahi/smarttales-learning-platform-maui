@@ -1,0 +1,268 @@
+@using SmartTales.Data
+@using SmartTales.Repository.IRepository
+@using SmartTales.Model
+@using SmartTales.Service
+@inject IUserRepository _userRepository
+@inject AssignmentService _assignmentService
+@inject NavigationManager Navigation
+@inject IJSRuntime _JS
+
+<div class="upload-container @(IsVisible ? "visible" : "")">
+    <div class="upload-content">
+        <h2>Upload a Story for Your Child</h2>
+        <p class="greeting-text">Share an enriching story that will help your child learn and grow!</p>
+
+        <div class="upload-form">
+            <EditForm Model="@storyUpload" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label for="title">Story Title</label>
+                    <InputText id="title" class="form-control" @bind-Value="storyUpload.Title" />
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <InputTextArea id="description" class="form-control" @bind-Value="storyUpload.Description" rows="3" />
+                </div>
+
+                <div class="form-group">
+                    <label>Select Child</label>
+                    @if (children != null && children.Any())
+                    {
+                        <select class="form-control" @bind="selectedChildId">
+                            <option value="">Choose a child...</option>
+                            @foreach (var child in children)
+                            {
+                                <option value="@child.Id">@child.FirstName @child.LastName</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <p class="text-warning">No children found. Please add your children first.</p>
+                    }
+                </div>
+
+                <div class="form-group">
+                    <label>Upload Story File</label>
+                    <div class="file-upload-container">
+                        <InputFile OnChange="OnFileSelected" accept=".pdf,.doc,.docx" class="form-control" />
+                        <small class="text-muted">Accepted formats: PDF, Word documents (DOC, DOCX)</small>
+                    </div>
+                    @if (!string.IsNullOrEmpty(selectedFileName))
+                    {
+                        <div class="selected-file">
+                            <span>Selected file: @selectedFileName</span>
+                        </div>
+                    }
+                </div>
+
+                <div class="upload-guidelines">
+                    <h4>Upload Guidelines:</h4>
+                    <ul>
+                        <li>File must be in PDF or Word format</li>
+                        <li>Maximum file size: 10MB</li>
+                        <li>Content should be age-appropriate</li>
+                        <li>Ensure the story has clear educational value</li>
+                    </ul>
+                </div>
+
+                <div class="form-group">
+                    @if (children.Any())
+                    {
+                        <button type="submit" class="btn btn-primary" disabled="@(!IsFormValid())">
+                            <i class="fas fa-upload"></i>
+                            Send Story to Child
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="no-children-message">
+                            <p class="text-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                You need to add children to your account before you can send stories.
+                            </p>
+                            <button type="button" class="btn btn-secondary" @onclick="NavigateToChildren">
+                                <i class="fas fa-child"></i>
+                                Add Children
+                            </button>
+                        </div>
+                    }
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    private StoryUpload storyUpload = new();
+    private List<User> children = new();
+    private int? selectedChildId;
+    private IBrowserFile selectedFile;
+    private string selectedFileName;
+    private const int MaxFileSize = 10 * 1024 * 1024; // 10MB
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadChildren();
+    }
+
+    private async Task LoadChildren()
+    {
+        try
+        {
+            // Get the parent ID from localStorage
+            var parentIdStr = await _JS.InvokeAsync<string>("localStorage.getItem", "currentParentId");
+            if (int.TryParse(parentIdStr, out int parentId))
+            {
+                // Get only the children that belong to this parent
+                var parentChildren = await _userRepository.GetChildrenByParentIdAsync(parentId);
+                children = parentChildren.ToList();
+
+                if (!children.Any())
+                {
+                    await _JS.ToastrInfo("No children found. Please add children to your account first.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading children: {ex.Message}");
+        }
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file != null)
+            {
+                // Check file size
+                if (file.Size > MaxFileSize)
+                {
+                    await _JS.ToastrError("File size exceeds 10MB limit.");
+                    return;
+                }
+
+                // Check file extension
+                var extension = Path.GetExtension(file.Name).ToLower();
+                if (extension != ".pdf" && extension != ".doc" && extension != ".docx")
+                {
+                    await _JS.ToastrError("Only PDF and Word documents are allowed.");
+                    return;
+                }
+
+                selectedFile = file;
+                selectedFileName = file.Name;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error selecting file: {ex.Message}");
+        }
+    }
+
+    private bool IsFormValid()
+    {
+        return !string.IsNullOrEmpty(storyUpload.Title) &&
+               !string.IsNullOrEmpty(storyUpload.Description) &&
+               selectedChildId.HasValue &&
+               selectedFile != null;
+    }
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            if (selectedFile == null || !selectedChildId.HasValue)
+            {
+                await _JS.ToastrError("Please select a file and a child.");
+                return;
+            }
+
+            // Get parent's name for the assignment
+            var parentIdStr = await _JS.InvokeAsync<string>("localStorage.getItem", "currentParentId");
+            var parentName = "Parent";
+            if (int.TryParse(parentIdStr, out int parentId))
+            {
+                var parent = await _userRepository.GetAsync(parentId);
+                if (parent != null)
+                {
+                    parentName = $"{parent.FirstName} {parent.LastName}";
+                }
+            }
+
+            // Create a new assignment for the child
+            var assignment = new AssignmentModel
+            {
+                Title = storyUpload.Title,
+                Description = storyUpload.Description,
+                AssignmentType = "ParentStory",
+                Points = 10, // Default points for parent stories
+                TeacherName = parentName, // Use parent's name
+                DueDate = DateTime.Now.AddDays(7), // Give 1 week to read
+                IsPublished = true,
+                Class = "Parent Story", // Special class for parent stories
+                Attachments = new List<string>(), // Initialize empty attachments list
+                StudentId = selectedChildId.Value // Link assignment to the selected child
+            };
+
+            // Save the file
+            try
+            {
+                var fileContent = new byte[selectedFile.Size];
+                await selectedFile.OpenReadStream(MaxFileSize).ReadAsync(fileContent);
+                
+                // TODO: Implement proper file storage
+                // For now, just add the filename to attachments
+                assignment.Attachments.Add(selectedFile.Name);
+            }
+            catch (Exception ex)
+            {
+                await _JS.ToastrError($"Error saving file: {ex.Message}");
+                return;
+            }
+
+            // Save the assignment
+            await _assignmentService.AddAssignment(assignment);
+
+            // Get the child's name for the success message
+            var selectedChild = children.FirstOrDefault(c => c.Id == selectedChildId.Value);
+            var childName = selectedChild != null ? $"{selectedChild.FirstName} {selectedChild.LastName}" : "your child";
+
+            await _JS.ToastrSuccess($"Story '{storyUpload.Title}' has been successfully sent to {childName}!");
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error uploading story: {ex.Message}");
+        }
+    }
+
+    private void ResetForm()
+    {
+        storyUpload = new StoryUpload();
+        selectedChildId = null;
+        selectedFile = null;
+        selectedFileName = null;
+        StateHasChanged();
+    }
+
+    private void NavigateToChildren()
+    {
+        Navigation.NavigateTo("/parent-dashboard");
+        // Note: The parent dashboard will need to be updated to navigate to children page
+    }
+
+    private class StoryUpload
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+}

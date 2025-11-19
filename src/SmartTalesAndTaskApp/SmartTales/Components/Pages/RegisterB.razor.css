@@ -1,0 +1,110 @@
+﻿.Register-Loading {
+    height: 100vh;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.Register-CARD {
+    border-radius: 1.25rem;
+    margin: 2%;
+    padding: 2%;
+}
+
+.Register-HEADER {
+    background-color: #4A90E2;
+    color: #ffffff;
+    border-radius: 1.25rem;
+}
+
+.Register-HEADING {
+    font-size: 1.125rem;
+    font-family: 'Acme', sans-serif;
+    font-weight: bold;
+    cursor: default;
+}
+
+.Register-CARD-BODY {
+    padding: 2rem;
+}
+
+.Role-BUTTON {
+    background-color: #FFC107;
+    border: none;
+    border-radius: 0.625rem;
+    color: #333;
+    font-family: 'Lora', sans-serif;
+    font-weight: bold;
+    margin: 0.5rem;
+    width: 50%;
+    text-align: center;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    padding: 0.5rem 1rem;
+}
+
+    .Role-BUTTON.active {
+        background-color: #4A90E2;
+        color: #ffffff;
+    }
+
+
+.Register-ROLE_TITLE {
+    font-family: 'Acme', sans-serif;
+    cursor: default;
+}
+
+.Register-BTN {
+    display: inline-block;
+    background-color: #FFC107;
+    border: none;
+    border-radius: 0.625rem;
+    padding: 0.625rem 1.25rem;
+    color: #333;
+    font-family: 'Lora', sans-serif;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    margin-top: 0.625rem;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+    .Register-BTN:hover {
+        background-color: #e0a406;
+        transform: scale(1.05);
+    }
+
+@media (max-width: 768px) {
+
+    .Register-BUTTON-Div {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .Register-BUTTON {
+        width: 100%;
+    }
+
+    .Register-CARD-BODY {
+        padding: 1rem;
+    }
+
+    .Register-HEADING {
+        font-size: 1.25rem;
+    }
+
+    .Role-BUTTON {
+        background-color: #FFC107;
+        border: none;
+        border-radius: 0.625rem;
+        color: #333;
+        font-family: 'Lora', sans-serif;
+        font-weight: bold;
+        margin: 0.5rem;
+        width: 65%;
+        text-align: center;
+        transition: background-color 0.3s ease, transform 0.2s ease;
+        padding: 0.5rem 1rem;
+    }
+}

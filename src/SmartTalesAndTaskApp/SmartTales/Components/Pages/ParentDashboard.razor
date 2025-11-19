@@ -1,0 +1,572 @@
+@page "/parent-dashboard"
+@using SmartTales.Model
+@using SmartTales.Data
+@using SmartTales.Repository.IRepository
+@using SmartTales.Service
+@inject IUserRepository _userRepository
+@inject IParentChildRepository _parentChildRepository
+@inject ParentDashboardService _parentDashboardService
+@inject NavigationManager Navigation
+@inject IJSRuntime _JS
+
+<div class="dashboard-container">
+    @if (CurrentPage == "home")
+    {
+        <div class="greeting-section">
+            <div class="greeting-header">
+                <div class="greeting-text">
+                    <h1>Hello, @(currentParent?.FirstName ?? "Parent")!</h1>
+                    <p class="date">@DateTime.Now.ToString("MMMM yyyy")</p>
+                </div>
+                <div class="logout-button" @onclick="HandleLogout">
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary-section">
+            <h2>Dashboard Summary</h2>
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <div class="summary-icon">
+                        <i class="fas fa-child"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-value">@dashboardSummary.TotalChildren</div>
+                        <div class="summary-label">Children</div>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-icon">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-value">@dashboardSummary.TotalStoriesSent</div>
+                        <div class="summary-label">Stories Sent</div>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-value">@dashboardSummary.TotalAssignmentsCompleted</div>
+                        <div class="summary-label">Completed</div>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="summary-content">
+                        <div class="summary-value">@dashboardSummary.AverageProgress%</div>
+                        <div class="summary-label">Avg Progress</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="progress-section">
+            <h2>Monthly Progress</h2>
+            <div class="progress-cards">
+                @foreach (var month in progressData)
+                {
+                    <div class="progress-card">
+                        <div class="month-label">@month.Month</div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: @(month.Progress)%">
+                                <span class="progress-text">@month.Progress%</span>
+                            </div>
+                        </div>
+                        <div class="stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Stories Read</span>
+                                <span class="stat-value">@month.StoriesRead</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Tasks Completed</span>
+                                <span class="stat-value">@month.TasksCompleted</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else if (CurrentPage == "upload")
+    {
+        <ParentStoryUpload IsVisible="true" />
+    }
+    else if (CurrentPage == "children")
+    {
+        <div class="children-container">
+            <div class="children-header">
+                <h2>My Children</h2>
+                <button class="btn-add-child" @onclick="ShowAddChildModal">
+                    <i class="fas fa-plus"></i>
+                    Add Child
+                </button>
+            </div>
+
+            <div class="children-list">
+                @if (children.Any())
+                {
+                    @foreach (var child in children)
+                    {
+                        <div class="child-card">
+                            <div class="child-info">
+                                <div class="child-avatar">
+                                    <i class="fas fa-child"></i>
+                                </div>
+                                <div class="child-details">
+                                    <h3>@child.FirstName @child.LastName</h3>
+                                    <p class="child-grade">Grade: @(child.GradeLevel ?? "Not specified")</p>
+                                    <p class="child-email">@child.Email</p>
+                                </div>
+                            </div>
+                            <div class="child-actions">
+                                <button class="btn-send-story" @onclick="() => SendStoryToChild(child.Id)">
+                                    <i class="fas fa-book"></i>
+                                    Send Story
+                                </button>
+                                <button class="btn-remove-child" @onclick="() => RemoveChild(child.Id)">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="no-children">
+                        <i class="fas fa-child"></i>
+                        <h3>No children added yet</h3>
+                        <p>Add your children to start sending them stories and tracking their progress.</p>
+                        <button class="btn-add-first-child" @onclick="ShowAddChildModal">
+                            <i class="fas fa-plus"></i>
+                            Add Your First Child
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (showAddChildModal)
+        {
+            <div class="modal-overlay">
+                <div class="modal-content add-child-modal">
+                    <h3>Add Child</h3>
+                    <p>Enter your child's email address to link them to your account.</p>
+                    <div class="form-group">
+                        <label>Child's Email</label>
+                        <input type="email" @bind="newChildEmail" class="form-control" placeholder="Enter child's email address" />
+                    </div>
+                    <div class="modal-buttons">
+                        <button class="btn-cancel" @onclick="() => { showAddChildModal = false; newChildEmail = string.Empty; }">Cancel</button>
+                        <button class="btn-confirm" @onclick="AddChild" disabled="@string.IsNullOrEmpty(newChildEmail)">Add Child</button>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else if (CurrentPage == "settings")
+    {
+        <div class="settings-container">
+            <div class="settings-header">
+                <h2>Settings</h2>
+                <div class="logout-button" @onclick="HandleLogout">
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+            </div>
+
+            <div class="profile-section">
+                <div class="profile-picture-container">
+                    <div class="profile-picture-wrapper" @onclick="TriggerFileInput">
+                        @if (!string.IsNullOrEmpty(profilePictureUrl))
+                        {
+                            <img src="@profilePictureUrl" alt="Profile Picture" class="profile-picture" />
+                        }
+                        else
+                        {
+                            <div class="profile-picture-placeholder">
+                                <i class="fas fa-user"></i>
+                            </div>
+                        }
+                        <div class="edit-overlay">
+                            <i class="fas fa-pencil-alt"></i>
+                        </div>
+                        <InputFile OnChange="OnProfilePictureSelected" accept=".jpg,.jpeg,.png" class="hidden-file-input" id="profilePictureInput" />
+                    </div>
+                </div>
+
+                <div class="profile-form">
+                    <div class="form-group">
+                        <label>First Name</label>
+                        <input type="text" @bind="currentParent.FirstName" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label>Last Name</label>
+                        <input type="text" @bind="currentParent.LastName" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" @bind="currentParent.Email" class="form-control" readonly />
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <input type="tel" @bind="currentParent.PhoneNumber" class="form-control" />
+                    </div>
+                    <div class="form-group">
+                        <label>Address</label>
+                        <input type="text" @bind="currentParent.Address" class="form-control" />
+                    </div>
+
+                    <button class="btn-save" @onclick="SaveProfile">
+                        <i class="fas fa-save"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+
+            <div class="danger-zone">
+                <h3>Account Settings</h3>
+                <div class="danger-zone-content">
+                    <div class="warning-text">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>Deleting your account will permanently remove all your data. This action cannot be undone.</p>
+                    </div>
+                    <button class="btn-delete" @onclick="ShowDeleteConfirmation">
+                        <i class="fas fa-trash-alt"></i>
+                        Delete Account
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        @if (showDeleteConfirmation)
+        {
+            <div class="modal-overlay">
+                <div class="modal-content">
+                    <h3>Delete Account</h3>
+                    <p>Are you sure you want to delete your account? This action cannot be undone.</p>
+                    <div class="modal-buttons">
+                        <button class="btn-cancel" @onclick="() => showDeleteConfirmation = false">Cancel</button>
+                        <button class="btn-confirm-delete" @onclick="DeleteAccount">Delete Account</button>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+
+    <nav class="bottom-navbar">
+        <div class="nav-item @(CurrentPage == "home" ? "active" : "")" @onclick='() => NavigateToPage("home")'>
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </div>
+        <div class="nav-item @(CurrentPage == "upload" ? "active" : "")" @onclick='() => NavigateToPage("upload")'>
+            <i class="fas fa-book-open"></i>
+            <span>Upload Story</span>
+        </div>
+        <div class="nav-item @(CurrentPage == "children" ? "active" : "")" @onclick='() => NavigateToPage("children")'>
+            <i class="fas fa-child"></i>
+            <span>My Children</span>
+        </div>
+        <div class="nav-item @(CurrentPage == "settings" ? "active" : "")" @onclick='() => NavigateToPage("settings")'>
+            <i class="fas fa-cog"></i>
+            <span>Settings</span>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private User? currentParent;
+    private int currentParentId;
+    private string CurrentPage { get; set; } = "home";
+    private string? profilePictureUrl;
+    private bool showDeleteConfirmation = false;
+    private List<User> children = new();
+    private bool showAddChildModal = false;
+    private string newChildEmail = string.Empty;
+    private List<MonthlyProgressData> progressData = new();
+    private ParentDashboardSummary dashboardSummary = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var storedParentId = await _JS.InvokeAsync<string>("localStorage.getItem", "currentParentId");
+
+            if (!string.IsNullOrEmpty(storedParentId) && int.TryParse(storedParentId, out int parsedId))
+            {
+                currentParentId = parsedId;
+                await LoadParentData();
+                await LoadChildren();
+                await LoadDashboardData();
+            }
+            else
+            {
+                Navigation.NavigateTo("/parent-login");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading dashboard: {ex.Message}");
+            Navigation.NavigateTo("/parent-login");
+        }
+    }
+
+    private async Task LoadParentData()
+    {
+        try
+        {
+            currentParent = await _userRepository.GetAsync(currentParentId);
+            if (currentParent == null || currentParent.Role != "Parent")
+            {
+                await _JS.ToastrError("Invalid parent account. Please login again.");
+                Navigation.NavigateTo("/parent-login");
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading parent data: {ex.Message}");
+            Navigation.NavigateTo("/parent-login");
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        try
+        {
+            // Clear all localStorage items
+            await _JS.InvokeVoidAsync("localStorage.clear");
+            await _JS.ToastrSuccess("Logged out successfully!");
+            Navigation.NavigateTo("/parent-login");
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error during logout: {ex.Message}");
+        }
+    }
+
+    private async Task OnProfilePictureSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file != null)
+            {
+                // Check file size (max 5MB)
+                if (file.Size > 5 * 1024 * 1024)
+                {
+                    await _JS.ToastrError("File size must be less than 5MB");
+                    return;
+                }
+
+                // Check file type
+                var allowedTypes = new[] { ".jpg", ".jpeg", ".png" };
+                var extension = Path.GetExtension(file.Name).ToLower();
+                if (!allowedTypes.Contains(extension))
+                {
+                    await _JS.ToastrError("Only JPG and PNG files are allowed");
+                    return;
+                }
+
+                // TODO: Implement actual file storage
+                // For now, just store the filename
+                profilePictureUrl = file.Name;
+                await _JS.ToastrSuccess("Profile picture updated!");
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error uploading profile picture: {ex.Message}");
+        }
+    }
+
+    private async Task SaveProfile()
+    {
+        try
+        {
+            if (currentParent != null)
+            {
+                var updatedParent = await _userRepository.UpdateAsync(currentParent);
+                if (updatedParent != null)
+                {
+                    await _JS.ToastrSuccess("Profile updated successfully!");
+                }
+                else
+                {
+                    await _JS.ToastrError("Failed to update profile");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error saving profile: {ex.Message}");
+        }
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        showDeleteConfirmation = true;
+    }
+
+    private async Task DeleteAccount()
+    {
+        try
+        {
+            if (currentParent != null)
+            {
+                var success = await _userRepository.DeleteAsync(currentParent.Id);
+                if (success)
+                {
+                    await _JS.InvokeVoidAsync("localStorage.clear");
+                    await _JS.ToastrSuccess("Account deleted successfully");
+                    Navigation.NavigateTo("/parent-login");
+                }
+                else
+                {
+                    await _JS.ToastrError("Failed to delete account");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error deleting account: {ex.Message}");
+        }
+    }
+
+    private void NavigateToPage(string page)
+    {
+        CurrentPage = page;
+        StateHasChanged();
+    }
+
+    private async Task TriggerFileInput()
+    {
+        await _JS.InvokeVoidAsync("triggerFileInput", "profilePictureInput");
+    }
+
+
+
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            // Load progress data and dashboard summary
+            progressData = await _parentDashboardService.GetParentDashboardProgressAsync(currentParentId);
+            dashboardSummary = await _parentDashboardService.GetParentDashboardSummaryAsync(currentParentId);
+
+            Console.WriteLine($"Loaded dashboard data: {progressData.Count} months, {dashboardSummary.TotalChildren} children");
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading dashboard data: {ex.Message}");
+            Console.WriteLine($"Error loading dashboard data: {ex.Message}");
+        }
+    }
+
+    private async Task LoadChildren()
+    {
+        try
+        {
+            var parentChildren = await _userRepository.GetChildrenByParentIdAsync(currentParentId);
+            children = parentChildren.ToList();
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading children: {ex.Message}");
+        }
+    }
+
+    private void ShowAddChildModal()
+    {
+        showAddChildModal = true;
+        newChildEmail = string.Empty;
+    }
+
+    private async Task AddChild()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(newChildEmail))
+            {
+                await _JS.ToastrError("Please enter a valid email address.");
+                return;
+            }
+
+            // Find the child by email
+            var child = await _userRepository.GetUserByEmailAsync(newChildEmail);
+            if (child == null)
+            {
+                await _JS.ToastrError("No user found with this email address.");
+                return;
+            }
+
+            if (child.Role != "Kid")
+            {
+                await _JS.ToastrError("The user with this email is not registered as a child.");
+                return;
+            }
+
+            // Check if relationship already exists
+            var relationshipExists = await _parentChildRepository.IsParentChildRelationshipExistsAsync(currentParentId, child.Id);
+            if (relationshipExists)
+            {
+                await _JS.ToastrError("This child is already linked to your account.");
+                return;
+            }
+
+            // Create the parent-child relationship
+            var parentChild = new ParentChildModel
+            {
+                ParentId = currentParentId,
+                ChildId = child.Id,
+                CreatedAt = DateTime.Now,
+                IsActive = true
+            };
+
+            await _parentChildRepository.CreateAsync(parentChild);
+            await LoadChildren(); // Refresh the children list
+            await LoadDashboardData(); // Refresh dashboard data
+            showAddChildModal = false;
+            newChildEmail = string.Empty;
+
+            await _JS.ToastrSuccess($"{child.FirstName} {child.LastName} has been added to your children list!");
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error adding child: {ex.Message}");
+        }
+    }
+
+    private async Task RemoveChild(int childId)
+    {
+        try
+        {
+            var success = await _parentChildRepository.RemoveParentChildRelationshipAsync(currentParentId, childId);
+            if (success)
+            {
+                await LoadChildren(); // Refresh the children list
+                await LoadDashboardData(); // Refresh dashboard data
+                await _JS.ToastrSuccess("Child removed from your account.");
+            }
+            else
+            {
+                await _JS.ToastrError("Failed to remove child from your account.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error removing child: {ex.Message}");
+        }
+    }
+
+    private void SendStoryToChild(int childId)
+    {
+        // Navigate to upload page and pre-select the child
+        CurrentPage = "upload";
+        StateHasChanged();
+    }
+}

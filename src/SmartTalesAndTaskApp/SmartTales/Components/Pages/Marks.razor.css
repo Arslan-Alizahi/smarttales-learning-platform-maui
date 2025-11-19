@@ -1,0 +1,153 @@
+.marks-container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    min-height: 100vh;
+    background-color: #ffffff;
+}
+
+.marks-header {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.marks-header h1 {
+    font-size: 2.5rem;
+    color: #333;
+    margin-bottom: 10px;
+    font-weight: 700;
+}
+
+.subtitle {
+    color: #666;
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+}
+
+.marks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    padding: 10px;
+}
+
+.mark-card {
+    background: white;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.mark-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.mark-header {
+    padding: 20px;
+    color: white;
+    position: relative;
+}
+
+.mark-title {
+    margin-bottom: 15px;
+}
+
+.mark-title h3 {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 600;
+}
+
+.mark-date {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.mark-score {
+    font-size: 2rem;
+    font-weight: 700;
+    text-align: right;
+}
+
+.mark-score .total {
+    font-size: 1.2rem;
+    opacity: 0.8;
+}
+
+.mark-details {
+    padding: 20px;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.detail-item .label {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.detail-item .value {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.performance-bar {
+    height: 8px;
+    background: #eee;
+    border-radius: 4px;
+    margin: 15px 0;
+    overflow: hidden;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 1s ease-in-out;
+}
+
+.feedback {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+}
+
+.feedback p {
+    color: #666;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .marks-container {
+        padding: 15px;
+    }
+
+    .marks-header h1 {
+        font-size: 2rem;
+    }
+
+    .mark-card {
+        margin-bottom: 15px;
+    }
+}
+
+@media (max-width: 480px) {
+    .marks-header h1 {
+        font-size: 1.8rem;
+    }
+
+    .mark-title h3 {
+        font-size: 1.2rem;
+    }
+
+    .mark-score {
+        font-size: 1.8rem;
+    }
+} 

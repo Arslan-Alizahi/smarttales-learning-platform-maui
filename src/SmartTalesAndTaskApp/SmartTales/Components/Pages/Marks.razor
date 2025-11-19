@@ -1,0 +1,231 @@
+@page "/marks"
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject GradeService GradeService
+@using SmartTales.Model
+<SmartTales.Components.Shared.Header Title="Marks Summary" />
+<div class="marks-container">
+    <div class="marks-header">
+        <h1>My Marks</h1>
+        <p class="subtitle">View your performance in assignments</p>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>Loading your grades...</p>
+        </div>
+    }
+    else if (studentGrades.Any())
+    {
+        <div class="marks-grid">
+            @foreach (var grade in studentGrades)
+            {
+                <div class="mark-card">
+                    <div class="mark-header" style="background: @grade.GradeColor">
+                        <div class="mark-title">
+                            <h3>@grade.AssignmentTitle</h3>
+                            <span class="mark-date">@grade.GradedTimeAgo</span>
+                        </div>
+                        <div class="mark-score">
+                            <span class="score">@(grade.NumericalGrade?.ToString("F1") ?? "N/A")</span>
+                            <span class="total">/ @grade.MaxPoints</span>
+                        </div>
+                    </div>
+                    <div class="mark-details">
+                        <div class="detail-item">
+                            <span class="label">Grade</span>
+                            <span class="value" style="color: @grade.GradeColor">@grade.GradeDisplay</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Percentage</span>
+                            <span class="value">@grade.PercentageDisplay</span>
+                        </div>
+                        <div class="performance-bar">
+                            <div class="bar-fill" style="width: @(grade.Percentage)%; background: @grade.GradeColor"></div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(grade.Feedback))
+                        {
+                            <div class="feedback">
+                                <strong>Teacher Feedback:</strong>
+                                <p>@grade.Feedback</p>
+                            </div>
+                        }
+                        <div class="grade-meta">
+                            <small>Graded by @grade.TeacherName on @(grade.GradedDate?.ToString("MMM dd, yyyy") ?? "Unknown date")</small>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="no-grades">
+            <div class="no-grades-icon">
+                <i class="bi bi-award"></i>
+            </div>
+            <h3>No Grades Yet</h3>
+            <p>Your grades will appear here once your teacher grades your assignments.</p>
+            <button class="btn-back" @onclick="GoToDashboard">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<GradeViewModel> studentGrades = new List<GradeViewModel>();
+    private bool isLoading = true;
+    private int currentStudentId = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStudentGrades();
+    }
+
+    private async Task LoadStudentGrades()
+    {
+        try
+        {
+            isLoading = true;
+
+            // Get current student ID from localStorage
+            var studentIdStr = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "currentKidId");
+            Console.WriteLine($"Retrieved student ID from localStorage: '{studentIdStr}'");
+
+            if (!string.IsNullOrEmpty(studentIdStr) && int.TryParse(studentIdStr, out int studentId))
+            {
+                currentStudentId = studentId;
+                Console.WriteLine($"Parsed student ID: {currentStudentId}");
+
+                studentGrades = await GradeService.GetStudentGradesWithDetailsAsync(currentStudentId);
+                Console.WriteLine($"Loaded {studentGrades.Count} grades for student {currentStudentId}");
+
+                // Debug: Log each grade
+                foreach (var grade in studentGrades)
+                {
+                    Console.WriteLine($"Grade: {grade.AssignmentTitle} - {grade.GradeDisplay} - {grade.NumericalGrade}/{grade.MaxPoints}");
+                }
+            }
+            else
+            {
+                Console.WriteLine("No student ID found in localStorage or failed to parse");
+                studentGrades = new List<GradeViewModel>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading student grades: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            studentGrades = new List<GradeViewModel>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void GoToDashboard()
+    {
+        NavigationManager.NavigateTo("/kid-dashboard");
+    }
+}
+
+<style>
+    .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem;
+        text-align: center;
+    }
+
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 1rem;
+    }
+
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .no-grades {
+        text-align: center;
+        padding: 3rem 2rem;
+        color: #6c757d;
+    }
+
+    .no-grades-icon {
+        font-size: 4rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
+    }
+
+    .no-grades h3 {
+        color: #495057;
+        margin-bottom: 1rem;
+    }
+
+    .no-grades p {
+        margin-bottom: 2rem;
+        line-height: 1.5;
+    }
+
+    .btn-back {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 25px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 500;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .btn-back:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .grade-meta {
+        margin-top: 1rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #e9ecef;
+    }
+
+    .grade-meta small {
+        color: #6c757d;
+        font-style: italic;
+    }
+
+    .feedback {
+        margin-top: 1rem;
+        padding: 0.75rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border-left: 3px solid #007bff;
+    }
+
+    .feedback strong {
+        color: #333;
+        font-size: 0.9rem;
+    }
+
+    .feedback p {
+        margin: 0.25rem 0 0 0;
+        color: #555;
+        line-height: 1.4;
+    }
+</style>

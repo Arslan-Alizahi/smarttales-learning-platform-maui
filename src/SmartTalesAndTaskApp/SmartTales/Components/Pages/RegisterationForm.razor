@@ -1,0 +1,95 @@
+﻿@* @page "/RegisterationForm" *@
+@* @inject IUserRepository _userRepository *@
+@* @inject NavigationManager Navigation *@
+@* @inject IJSRuntime _JS *@
+
+@* <div class="registration-container"> *@
+@*     <div class="logo"> *@
+@*         <img src="/images/logokids-removebg-preview.png" alt="Alternate Text" /> *@
+@*         <h3>Registration Form</h3> *@
+@*     </div> *@
+
+@*     <EditForm Model="User" OnValidSubmit="HandleValidSubmit"> *@
+@*         <DataAnnotationsValidator /> *@
+@*         <ValidationSummary /> *@
+
+@*         <div class="form-group"> *@
+@*             <label for="firstName">First Name</label> *@
+@*             <InputText id="firstName" @bind-Value="User.FirstName" placeholder="First Name" class="form-input" /> *@
+@*         </div> *@
+
+@*         <div class="form-group"> *@
+@*             <label for="lastName">Last Name</label> *@
+@*             <InputText id="lastName" @bind-Value="User.LastName" placeholder="Last Name" class="form-input" /> *@
+@*         </div> *@
+
+@*         <div class="form-group"> *@
+@*             <label for="email">Email</label> *@
+@*             <InputText id="email" @bind-Value="User.Email" placeholder="Email" class="form-input" /> *@
+@*         </div> *@
+
+@*         <div class="form-group"> *@
+@*             <label for="phone">Phone Number</label> *@
+@*             <InputText id="phone" @bind-Value="User.PhoneNumber" placeholder="Phone Number" class="form-input" /> *@
+@*         </div> *@
+
+@*         <div class="form-group"> *@
+@*             <label for="password">Password</label> *@
+@*             <InputText id="password" type="password" @bind-Value="User.Password" placeholder="Password" class="form-input" /> *@
+@*         </div> *@
+
+@*         <div class="form-group"> *@
+@*             <label for="confirmPassword">Confirm Password</label> *@
+@*             <InputText id="confirmPassword" type="password" @bind-Value="ConfirmPassword" placeholder="Confirm Password" class="form-input" /> *@
+@*         </div> *@
+
+@*         <div class="form-group"> *@
+@*             <label>Role</label> *@
+@*             <div class="radio-group"> *@
+@*                 <label class="radio-label"> *@
+@*                     <InputRadio @bind-Value="User.Role"  /> Parent *@
+@*                 </label> *@
+@*                 <label class="radio-label"> *@
+@*                     <InputRadio @bind-Value="User.Role"  /> Teacher *@
+@*                 </label> *@
+@*                 <label class="radio-label"> *@
+@*                     <InputRadio @bind-Value="User.Role"  /> Kid *@
+@*                 </label> *@
+@*             </div> *@
+@*         </div> *@
+
+@*         <div class="form-group"> *@
+@*             <button type="submit" class="register-btn">Register</button> *@
+@*         </div> *@
+@*     </EditForm> *@
+@* </div> *@
+
+@* @code { *@
+@*     private User User { get; set; } = new(); *@
+@*     private string ConfirmPassword { get; set; } *@
+
+@*     private async Task HandleValidSubmit() *@
+@*     { *@
+@*         try *@
+@*         { *@
+@*             // Validate password confirmation *@
+@*             if (User.Password != ConfirmPassword) *@
+@*             { *@
+@*                 await _JS.ToastrError("Passwords do not match."); *@
+@*                 return; *@
+@*             } *@
+
+@*             // Hash password *@
+@*             User.Password = BCrypt.Net.BCrypt.HashPassword(User.Password); *@
+
+@*             // Create the user *@
+@*             await _userRepository.CreateAsync(User); *@
+@*             await _JS.ToastrSuccess("Registration successful!"); *@
+@*             Navigation.NavigateTo("/login"); *@
+@*         } *@
+@*         catch (Exception ex) *@
+@*         { *@
+@*             await _JS.ToastrError($"Registration failed: {ex.Message}"); *@
+@*         } *@
+@*     } *@
+@* } *@

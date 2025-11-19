@@ -1,0 +1,421 @@
+@page "/assignment/{AssignmentId:int}"
+@using SmartTales.Service
+@using SmartTales.Model
+@using Microsoft.AspNetCore.Components.Forms
+@inject AssignmentService AssignmentService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject FileStorageService FileStorageService
+@implements IDisposable
+
+<ErrorBoundary @ref="errorBoundary">
+    <ChildContent>
+        <div class="assignment-details-container has-bottom-nav">
+            @if (isLoading)
+            {
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading assignment details...</p>
+                </div>
+            }
+            else if (error != null)
+            {
+                <div class="error-container">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <h3>Error Loading Assignment</h3>
+                    <p>@error</p>
+                    <button @onclick="GoBack" class="btn-back">Go Back</button>
+                </div>
+            }
+            else if (assignment == null)
+            {
+                <div class="error-container">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <h3>Assignment Not Found</h3>
+                    <p>The assignment you're looking for doesn't exist or has been removed.</p>
+                    <button @onclick="GoBack" class="btn-back">Go Back</button>
+                </div>
+            }
+            else
+            {
+                <div class="header">
+                    <button @onclick="GoBack" class="back-button">
+                        <i class="bi bi-arrow-left"></i>
+                    </button>
+                    <h1>Assignment Details</h1>
+                </div>
+
+                <div class="assignment-card">
+                    <div class="assignment-header">
+                        <h2>@assignment.Title</h2>
+                        <span class="badge">@assignment.Points pts</span>
+                    </div>
+
+                    <div class="assignment-meta">
+                        <div class="meta-item">
+                            <i class="bi bi-person"></i>
+                            <span>Teacher: @assignment.TeacherName</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="bi bi-calendar"></i>
+                            <span>Due: @assignment.DueDate.ToString("MMMM dd, yyyy")</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="bi bi-people"></i>
+                            <span>Class: @assignment.Class</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="bi bi-tag"></i>
+                            <span>Type: @assignment.AssignmentType</span>
+                        </div>
+                    </div>
+
+                    <div class="assignment-section">
+                        <h3>Description</h3>
+                        <div class="description-content">
+                            @assignment.Description
+                        </div>
+                    </div>
+
+                    @if (assignment.Attachments.Count > 0)
+                    {
+                        <div class="assignment-section">
+                            <FileDownloadComponent Files="assignment.Attachments" />
+                        </div>
+                    }
+
+                    <div class="assignment-section">
+                        <h3>Your Submission</h3>
+                        @if (hasSubmitted)
+                        {
+                            <div class="submission-status">
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>Submitted on @submissionDate.ToString("MMMM dd, yyyy")</span>
+                            </div>
+                            <div class="submitted-files">
+                                @foreach (var file in submittedFiles)
+                                {
+                                    <div class="file-item">
+                                        <i class="bi bi-file-earmark"></i>
+                                        <span>@FileStorageService.GetOriginalFileName(file)</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <InputFile id="studentFileInput" OnChange="OnFileChange" style="display:none;" multiple />
+                            <div class="upload-area" @onclick="TriggerFileInput" @ondragover="PreventDefault" @ondrop="PreventDefault" @ondragenter="PreventDefault">
+                                <i class="bi bi-cloud-upload"></i>
+                                <p>Drag and drop your files here or click to browse</p>
+                                <span class="file-types">Supported formats: PDF, DOC, DOCX, ZIP</span>
+                            </div>
+                            
+                            @if (uploadedFiles.Count > 0)
+                            {
+                                <div class="uploaded-files">
+                                    @foreach (var file in uploadedFiles)
+                                    {
+                                        <div class="file-item">
+                                            <i class="bi bi-file-earmark"></i>
+                                            <span>@FileStorageService.GetOriginalFileName(file)</span>
+                                            <button class="remove-button" @onclick="() => RemoveFile(file)">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            
+                            <div class="submission-notes">
+                                <h4>Add Notes (Optional)</h4>
+                                <textarea @bind="submissionNotes" placeholder="Add any notes for your teacher..."></textarea>
+                            </div>
+                            
+                            <div class="submission-actions">
+                                <button class="btn-submit" @onclick="SubmitAssignment" disabled="@(uploadedFiles.Count == 0)">
+                                    Submit Assignment
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (showSuccessMessage)
+        {
+            <div class="success-message">
+                <div class="success-content">
+                    <i class="bi bi-check-circle-fill"></i>
+                    <h3>Assignment Submitted!</h3>
+                    <p>Your assignment has been submitted successfully.</p>
+                    <button @onclick="GoToAssignments" class="btn-action">View All Assignments</button>
+                </div>
+            </div>
+        }
+
+        <KidBottomNavBar CurrentPage="assignments" />
+
+        <style>
+            .assignment-details-container.has-bottom-nav {
+                padding-bottom: 80px;
+                min-height: calc(100vh - 80px);
+            }
+        </style>
+    </ChildContent>
+    <ErrorContent>
+        <div class="error-container">
+            <i class="bi bi-exclamation-triangle"></i>
+            <h3>Something went wrong</h3>
+            <p>An unexpected error occurred while loading the assignment. Please try again.</p>
+            <button @onclick="GoBack" class="btn-back">Go Back</button>
+        </div>
+    </ErrorContent>
+</ErrorBoundary>
+
+@code {
+    [Parameter]
+    public int AssignmentId { get; set; }
+    
+    private AssignmentModel assignment;
+    private bool isLoading = true;
+    private bool hasSubmitted = false;
+    private DateTime submissionDate = DateTime.Now;
+    private List<string> submittedFiles = new List<string>();
+    private List<string> uploadedFiles = new List<string>();
+    private string submissionNotes = "";
+    private bool showSuccessMessage = false;
+    private string userRole = "";
+    
+    private DotNetObjectReference<AssignmentDetails> objRef;
+    private ErrorBoundary errorBoundary;
+    private string error;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            objRef = DotNetObjectReference.Create(this);
+            await LoadUserRole();
+            await LoadAssignment();
+        }
+        catch (Exception ex)
+        {
+            error = $"Error initializing: {ex.Message}";
+            Console.WriteLine($"Error in OnInitializedAsync: {ex}");
+        }
+    }
+    
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            await LoadAssignment();
+        }
+        catch (Exception ex)
+        {
+            error = $"Error loading assignment: {ex.Message}";
+            Console.WriteLine($"Error in OnParametersSetAsync: {ex}");
+        }
+    }
+    
+    private async Task LoadUserRole()
+    {
+        try
+        {
+            // Check for teacher role first
+            var teacherRole = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "teacherRole");
+            if (!string.IsNullOrEmpty(teacherRole))
+            {
+                userRole = "Teacher";
+                return;
+            }
+
+            // Check for kid role
+            var kidId = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "currentKidId");
+            if (!string.IsNullOrEmpty(kidId))
+            {
+                userRole = "Kid";
+                return;
+            }
+
+            // If no role is found, default to Kid view
+            userRole = "Kid";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading user role: {ex.Message}");
+            error = "Error loading user role. Please try logging in again.";
+            userRole = "Kid"; // Default to Kid view if there's an error
+        }
+    }
+    
+    private async Task LoadAssignment()
+    {
+        try
+        {
+            isLoading = true;
+            error = null;
+            
+            // Get assignment from service
+            assignment = await AssignmentService.GetAssignmentById(AssignmentId);
+            
+            if (assignment == null)
+            {
+                error = "Assignment not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            error = $"Error loading assignment: {ex.Message}";
+            Console.WriteLine($"Error in LoadAssignment: {ex}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    
+    private void GoBack()
+    {
+        try
+        {
+            if (userRole == "Teacher")
+            {
+                NavigationManager.NavigateTo("/submitted-assignments");
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/assignments");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error navigating back: {ex.Message}");
+            NavigationManager.NavigateTo("/");
+        }
+    }
+    
+    private void GoToAssignments()
+    {
+        NavigationManager.NavigateTo("/assignments");
+    }
+    
+    private async Task TriggerFileInput()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("triggerFileInput", "studentFileInput");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error triggering file input: {ex.Message}");
+        }
+    }
+    
+    private async Task PreventDefault(DragEventArgs e)
+    {
+        await Task.CompletedTask; // Just prevent default behavior
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Set up the drop zone with our JavaScript helper
+                await JSRuntime.InvokeVoidAsync("initializeDropZone", ".upload-area", objRef);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error setting up drop zone: {ex.Message}");
+            }
+        }
+    }
+    
+    public void Dispose()
+    {
+        objRef?.Dispose();
+    }
+    
+    [JSInvokable]
+    public void HandleDroppedFiles(string[] fileNames)
+    {
+        foreach (var fileName in fileNames)
+        {
+            uploadedFiles.Add(fileName);
+        }
+        StateHasChanged();
+    }
+    
+    private async Task OnFileChange(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            // Handle the selected files
+            foreach (var file in e.GetMultipleFiles(10)) // Limit to 10 files
+            {
+                // Save file to persistent storage
+                var savedFilePath = await FileStorageService.SaveFileAsync(file, "submissions");
+                uploadedFiles.Add(savedFilePath);
+                Console.WriteLine($"Student file saved: {file.Name} -> {savedFilePath}");
+            }
+            StateHasChanged(); // Refresh UI to show uploaded files
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"File upload error: {ex.Message}");
+            await JSRuntime.ToastrError($"Error uploading file: {ex.Message}");
+        }
+    }
+    
+    private void RemoveFile(string file)
+    {
+        uploadedFiles.Remove(file);
+        // Optionally delete the file from storage
+        FileStorageService.DeleteFile(file);
+        Console.WriteLine($"File removed: {file}");
+    }
+    
+
+    
+    private async Task SubmitAssignment()
+    {
+        try
+        {
+            // Get the current student ID from localStorage
+            var currentKidId = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "currentKidId");
+            if (!string.IsNullOrEmpty(currentKidId) && int.TryParse(currentKidId, out int studentId))
+            {
+                assignment.StudentId = studentId;
+            }
+
+            // Update the assignment's submission status
+            assignment.IsSubmitted = true;
+            assignment.SubmissionDate = DateTime.Now;
+            assignment.SubmittedFiles = new List<string>(uploadedFiles);
+            assignment.SubmissionNotes = submissionNotes;
+
+            // Update the assignment in the service
+            await AssignmentService.UpdateAssignment(assignment);
+
+            // Update local state
+            hasSubmitted = true;
+            submissionDate = DateTime.Now;
+            submittedFiles = new List<string>(uploadedFiles);
+
+            // Show success message
+            showSuccessMessage = true;
+
+            // Log successful submission
+            Console.WriteLine($"Assignment {assignment.AssignmentId} submitted successfully by student {assignment.StudentId}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error submitting assignment: {ex.Message}");
+            error = "Failed to submit assignment. Please try again.";
+        }
+    }
+} 

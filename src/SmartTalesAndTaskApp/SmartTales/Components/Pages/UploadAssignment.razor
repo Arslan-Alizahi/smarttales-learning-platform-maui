@@ -1,0 +1,63 @@
+@page "/upload"
+<SmartTales.Components.Shared.Header Title="UploadAssignment" />
+<div class="upload-container has-bottom-nav">
+    <div class="upload-header">
+        <h1>Upload Assignment</h1>
+        <p>Submit your completed assignments here</p>
+    </div>
+
+    <div class="upload-card">
+        <div class="upload-icon">
+            <span class="icon">📄</span>
+        </div>
+
+        <div class="upload-area">
+            <div class="upload-label">
+                <span class="upload-icon-large">📤</span>
+                <h3>Drag & Drop your file here</h3>
+                <p>or</p>
+                <button class="browse-button">Browse Files</button>
+                <p class="file-types">Supported formats: PDF, DOC, DOCX</p>
+            </div>
+        </div>
+
+        <!-- Example of selected file -->
+        <div class="selected-file">
+            <div class="file-info">
+                <span class="file-icon">📄</span>
+                <div class="file-details">
+                    <p class="file-name">Example_Assignment.pdf</p>
+                    <p class="file-size">2.5 MB</p>
+                </div>
+                <button class="remove-button">×</button>
+            </div>
+        </div>
+
+        <div class="upload-actions">
+            <button class="upload-button">Upload Assignment</button>
+        </div>
+    </div>
+
+    <div class="upload-guidelines">
+        <h3>Submission Guidelines</h3>
+        <ul>
+            <li>📝 Make sure your file is properly named</li>
+            <li>✅ Check that all required content is included</li>
+            <li>📅 Submit before the deadline</li>
+            <li>📊 Ensure your work meets the requirements</li>
+        </ul>
+    </div>
+</div>
+
+<KidBottomNavBar CurrentPage="upload" />
+
+<style>
+    .upload-container.has-bottom-nav {
+        padding-bottom: 80px; /* Add padding to account for the bottom navbar */
+        min-height: calc(100vh - 80px); /* Ensure the container takes up the full height minus the navbar */
+    }
+</style>
+
+@code {
+    // This is a demo file, so no actual functionality is implemented
+}

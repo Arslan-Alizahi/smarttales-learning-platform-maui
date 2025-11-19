@@ -1,0 +1,124 @@
+﻿/* Registration Page Styles */
+.logo img {
+    
+    justify-content:centre;
+    max-width:100%;
+    margin-top:0%;
+
+}
+.logo h3{
+    margin-top:1px;
+    margin-left:26%;
+    font-family:sans-serif;
+    color:black;
+    font-size:20px;
+    font-weight:bold;
+
+  
+}
+.registration-container {
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5%;
+    background-color: #f4f4f9;
+    min-height: 100vh;
+}
+
+.title {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+    color: #4A90E2;
+}
+
+.registration-form {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+label {
+    font-size: 1rem;
+    font-weight: 500;
+    display: block;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="tel"] {
+    width: 100%;
+    padding: 10px;
+    font-size: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.3s ease;
+}
+
+    input[type="text"]:focus,
+    input[type="email"]:focus,
+    input[type="tel"]:focus {
+        border-color: #4A90E2;
+    }
+
+.radio-group {
+    display: flex;
+    gap: 20px;
+}
+
+.radio-label {
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+}
+
+    .radio-label input {
+        margin-right: 8px;
+    }
+
+.register-btn {
+    width: 100%;
+    padding: 12px;
+    background-color: #4A90E2;
+    color: white;
+    font-size: 1.1rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+    .register-btn:hover {
+        background-color: #357ABD;
+    }
+
+    .register-btn:active {
+        background-color: #2F6F99;
+    }
+.form-input {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease; /* Smooth transition for effects */
+}
+
+    .form-input:focus {
+        outline: none; /* Removes default focus outline */
+        border-color: #ffd700; /* Gold border color */
+        box-shadow: 0 0 8px 2px rgba(255, 215, 0, 0.75); /* Adds a glowing gold effect */
+    }
+

@@ -1,0 +1,397 @@
+@page "/admin-notifications"
+@using SmartTales.Model
+@using SmartTales.Service
+@using System.Linq
+@inject PasswordResetService _passwordResetService
+@inject IJSRuntime _JS
+@inject NavigationManager Navigation
+
+<div class="notification-center-container">
+    <div class="notification-header">
+        <div class="header-left">
+            <h2>
+                <i class="fas fa-bell"></i>
+                Notification Center
+            </h2>
+            <p>Manage password reset requests and system notifications</p>
+        </div>
+        <div class="header-right">
+            <button class="btn btn-outline refresh-btn" @onclick="RefreshNotifications">
+                <i class="fas fa-sync-alt @(isRefreshing ? "fa-spin" : "")"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-section">
+        <div class="stat-card pending">
+            <div class="stat-icon">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-number">@pendingRequests.Count</div>
+                <div class="stat-label">Pending Requests</div>
+            </div>
+        </div>
+        <div class="stat-card completed">
+            <div class="stat-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-number">@completedToday</div>
+                <div class="stat-label">Completed Today</div>
+            </div>
+        </div>
+        <div class="stat-card total">
+            <div class="stat-icon">
+                <i class="fas fa-list"></i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-number">@allRequests.Count</div>
+                <div class="stat-label">Total Requests</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Requests Section -->
+    <div class="requests-section">
+        <div class="section-header">
+            <h3>
+                <i class="fas fa-exclamation-circle"></i>
+                Pending Password Reset Requests
+                @if (pendingRequests.Any())
+                {
+                    <span class="badge badge-warning">@pendingRequests.Count</span>
+                }
+            </h3>
+        </div>
+
+        @if (pendingRequests.Any())
+        {
+            <div class="requests-list">
+                @foreach (var request in pendingRequests)
+                {
+                    <div class="request-card pending-card">
+                        <div class="request-header">
+                            <div class="user-info">
+                                <div class="user-avatar">
+                                    <i class="fas @GetUserRoleIcon(request.UserRole)"></i>
+                                </div>
+                                <div class="user-details">
+                                    <h4>@request.UserDisplayName</h4>
+                                    <p class="user-email">@request.UserEmail</p>
+                                    <p class="user-phone">📱 @request.UserPhoneNumber</p>
+                                </div>
+                            </div>
+                            <div class="request-meta">
+                                <div class="request-time">
+                                    <i class="fas fa-clock"></i>
+                                    @request.RequestTimeAgo
+                                </div>
+                                <div class="request-status">
+                                    <span class="badge @request.StatusBadgeClass">@request.Status</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="request-actions">
+                            <button class="btn btn-success" @onclick="() => ProcessRequest(request.RequestId)">
+                                <i class="fas fa-key"></i>
+                                Reset Password
+                            </button>
+                            <button class="btn btn-danger" @onclick="() => CancelRequest(request.RequestId)">
+                                <i class="fas fa-times"></i>
+                                Cancel
+                            </button>
+                            <button class="btn btn-info" @onclick="() => ViewUserDetails(request.UserId)">
+                                <i class="fas fa-user"></i>
+                                View User
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <h4>No Pending Requests</h4>
+                <p>All password reset requests have been processed.</p>
+            </div>
+        }
+    </div>
+
+    <!-- Recent Activity Section -->
+    <div class="activity-section">
+        <div class="section-header">
+            <h3>
+                <i class="fas fa-history"></i>
+                Recent Activity
+            </h3>
+            <button class="btn btn-outline btn-sm" @onclick="ViewAllRequests">
+                View All
+            </button>
+        </div>
+
+        @if (recentRequests.Any())
+        {
+            <div class="activity-list">
+                @foreach (var request in recentRequests.Take(5))
+                {
+                    <div class="activity-item">
+                        <div class="activity-icon @request.Status.ToLower()">
+                            <i class="fas @GetStatusIcon(request.Status)"></i>
+                        </div>
+                        <div class="activity-content">
+                            <div class="activity-description">
+                                <strong>@request.UserDisplayName</strong> password reset @request.Status.ToLower()
+                            </div>
+                            <div class="activity-time">@request.RequestDateTime.ToString("MMM dd, yyyy HH:mm")</div>
+                        </div>
+                        @if (request.Status == "Completed")
+                        {
+                            <div class="activity-status success">
+                                <i class="fas fa-sms"></i>
+                                SMS Sent
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty-state small">
+                <i class="fas fa-info-circle"></i>
+                <span>No recent activity</span>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Process Request Modal -->
+@if (showProcessModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-content process-modal">
+            <div class="modal-header">
+                <h3>Process Password Reset</h3>
+                <button class="btn-close" @onclick="CloseProcessModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                @if (selectedRequest != null)
+                {
+                    <div class="user-summary">
+                        <h4>User Information</h4>
+                        <p><strong>Name:</strong> @selectedRequest.UserDisplayName</p>
+                        <p><strong>Email:</strong> @selectedRequest.UserEmail</p>
+                        <p><strong>Phone:</strong> @selectedRequest.UserPhoneNumber</p>
+                        <p><strong>Requested:</strong> @selectedRequest.RequestTimeAgo</p>
+                    </div>
+                    <div class="password-section">
+                        <label>New Password (auto-generated)</label>
+                        <div class="password-display">
+                            <input type="text" @bind="generatedPassword" class="form-control" readonly />
+                            <button class="btn btn-outline" @onclick="GenerateNewPassword">
+                                <i class="fas fa-sync-alt"></i>
+                                Generate New
+                            </button>
+                        </div>
+                    </div>
+                    <div class="confirmation-section">
+                        <div class="warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            This will send the new password via SMS to the user's phone number.
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseProcessModal">Cancel</button>
+                <button class="btn btn-success" @onclick="ConfirmProcessRequest" disabled="@isProcessing">
+                    @if (isProcessing)
+                    {
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Processing...</span>
+                    }
+                    else
+                    {
+                        <i class="fas fa-paper-plane"></i>
+                        <span>Send New Password</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PasswordResetRequestModel> pendingRequests = new();
+    private List<PasswordResetRequestModel> allRequests = new();
+    private List<PasswordResetRequestModel> recentRequests = new();
+    private int completedToday = 0;
+    private bool isRefreshing = false;
+    private bool showProcessModal = false;
+    private bool isProcessing = false;
+    private PasswordResetRequestModel? selectedRequest;
+    private string generatedPassword = "";
+    private int currentAdminId = 1; // This should come from session/auth
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadNotifications();
+    }
+
+    private async Task LoadNotifications()
+    {
+        try
+        {
+            pendingRequests = await _passwordResetService.GetPendingPasswordResetRequestsAsync();
+            allRequests = await _passwordResetService.GetAllPasswordResetRequestsAsync();
+            recentRequests = allRequests.OrderByDescending(r => r.RequestDateTime).Take(10).ToList();
+            
+            // Count completed today
+            completedToday = allRequests.Count(r => r.Status == "Completed" && 
+                r.ProcessedDateTime?.Date == DateTime.Today);
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading notifications: {ex.Message}");
+        }
+    }
+
+    private async Task RefreshNotifications()
+    {
+        isRefreshing = true;
+        await LoadNotifications();
+        isRefreshing = false;
+        await _JS.ToastrSuccess("Notifications refreshed!");
+    }
+
+    private async Task ProcessRequest(int requestId)
+    {
+        selectedRequest = pendingRequests.FirstOrDefault(r => r.RequestId == requestId);
+        if (selectedRequest != null)
+        {
+            GenerateNewPassword();
+            showProcessModal = true;
+        }
+    }
+
+    private async Task ConfirmProcessRequest()
+    {
+        if (selectedRequest == null) return;
+
+        try
+        {
+            isProcessing = true;
+            var result = await _passwordResetService.ProcessPasswordResetAsync(
+                selectedRequest.RequestId,
+                currentAdminId,
+                generatedPassword);
+
+            if (result.Success)
+            {
+                // Always reload notifications since password was reset
+                await LoadNotifications();
+                CloseProcessModal();
+
+                if (result.SMSDelivered)
+                {
+                    await _JS.ToastrSuccess("Password reset completed successfully! SMS with new password sent to user's phone.");
+                }
+                else
+                {
+                    await _JS.ToastrWarning($"Password reset completed, but SMS delivery failed. Please contact the user directly with the new password: {generatedPassword}");
+                }
+            }
+            else
+            {
+                await _JS.ToastrError($"Failed to process password reset: {result.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error processing request: {ex.Message}");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task CancelRequest(int requestId)
+    {
+        try
+        {
+            var success = await _passwordResetService.CancelPasswordResetRequestAsync(requestId, currentAdminId, "Cancelled by admin");
+            if (success)
+            {
+                await _JS.ToastrSuccess("Request cancelled successfully!");
+                await LoadNotifications();
+            }
+            else
+            {
+                await _JS.ToastrError("Failed to cancel request.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error cancelling request: {ex.Message}");
+        }
+    }
+
+    private void GenerateNewPassword()
+    {
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$";
+        var random = new Random();
+        generatedPassword = new string(Enumerable.Repeat(chars, 8)
+            .Select(s => s[random.Next(s.Length)]).ToArray());
+    }
+
+    private void CloseProcessModal()
+    {
+        showProcessModal = false;
+        selectedRequest = null;
+        generatedPassword = "";
+        isProcessing = false;
+    }
+
+    private void ViewUserDetails(int userId)
+    {
+        Navigation.NavigateTo($"/admin-user-details/{userId}");
+    }
+
+    private void ViewAllRequests()
+    {
+        Navigation.NavigateTo("/admin-password-requests");
+    }
+
+    private string GetUserRoleIcon(string role)
+    {
+        return role switch
+        {
+            "Kid" => "fa-child",
+            "Parent" => "fa-user-friends",
+            "Teacher" => "fa-chalkboard-teacher",
+            _ => "fa-user"
+        };
+    }
+
+    private string GetStatusIcon(string status)
+    {
+        return status switch
+        {
+            "Pending" => "fa-clock",
+            "Completed" => "fa-check-circle",
+            "Cancelled" => "fa-times-circle",
+            _ => "fa-question-circle"
+        };
+    }
+}

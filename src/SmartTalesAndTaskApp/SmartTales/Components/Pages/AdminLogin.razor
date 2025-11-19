@@ -1,0 +1,178 @@
+@page "/admin-login"
+@using SmartTales.Model
+@using SmartTales.Service
+@using System.ComponentModel.DataAnnotations
+@inject AdminService _adminService
+@inject NavigationManager Navigation
+@inject IJSRuntime _JS
+
+<div class="admin-login-container">
+    <div class="admin-login-card">
+        <div class="admin-login-header">
+            <div class="admin-logo">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <h2>Admin Portal</h2>
+            <p>Secure Administrator Access</p>
+        </div>
+
+        <div class="admin-login-form">
+            <EditForm Model="@loginModel" OnValidSubmit="@HandleLogin">
+                <DataAnnotationsValidator />
+                
+                <div class="form-group">
+                    <label for="username">
+                        <i class="fas fa-user"></i>
+                        Username or Email
+                    </label>
+                    <InputText id="username" @bind-Value="loginModel.Username" class="form-control" placeholder="Enter username or email" />
+                    <ValidationMessage For="@(() => loginModel.Username)" />
+                </div>
+
+                <div class="form-group">
+                    <label for="password">
+                        <i class="fas fa-lock"></i>
+                        Password
+                    </label>
+                    <div class="password-input-container">
+                        <InputText id="password" type="@(showPassword ? "text" : "password")" @bind-Value="loginModel.Password" class="form-control" placeholder="Enter password" />
+                        <button type="button" class="password-toggle" @onclick="TogglePasswordVisibility">
+                            <i class="fas @(showPassword ? "fa-eye-slash" : "fa-eye")"></i>
+                        </button>
+                    </div>
+                    <ValidationMessage For="@(() => loginModel.Password)" />
+                </div>
+
+                <div class="form-group remember-me">
+                    <label class="checkbox-container">
+                        <InputCheckbox @bind-Value="loginModel.RememberMe" />
+                        <span class="checkmark"></span>
+                        Remember me
+                    </label>
+                </div>
+
+                <button type="submit" class="btn-admin-login" disabled="@isLoading">
+                    @if (isLoading)
+                    {
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Authenticating...</span>
+                    }
+                    else
+                    {
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>Sign In</span>
+                    }
+                </button>
+            </EditForm>
+        </div>
+
+        <div class="admin-login-footer">
+            <div class="security-notice">
+                <i class="fas fa-info-circle"></i>
+                <span>This is a secure administrative area. All access is logged and monitored.</span>
+            </div>
+            <div class="back-to-app">
+                <a href="/" class="back-link">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Application
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="admin-login-background">
+        <div class="floating-shapes">
+            <div class="shape shape-1"></div>
+            <div class="shape shape-2"></div>
+            <div class="shape shape-3"></div>
+            <div class="shape shape-4"></div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private AdminLoginModel loginModel = new();
+    private bool showPassword = false;
+    private bool isLoading = false;
+
+    private async Task HandleLogin()
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            var admin = await _adminService.LoginAsync(loginModel.Username, loginModel.Password);
+            
+            if (admin == null)
+            {
+                await _JS.ToastrError("Invalid username or password. Please try again.");
+                return;
+            }
+
+            if (!admin.IsActive)
+            {
+                await _JS.ToastrError("Your admin account has been deactivated. Please contact a system administrator.");
+                return;
+            }
+
+            // Store admin information in localStorage
+            await _JS.InvokeVoidAsync("localStorage.setItem", "currentAdminId", admin.Id.ToString());
+            await _JS.InvokeVoidAsync("localStorage.setItem", "currentAdminUsername", admin.Username);
+            await _JS.InvokeVoidAsync("localStorage.setItem", "currentAdminRole", admin.Role);
+            
+            if (loginModel.RememberMe)
+            {
+                await _JS.InvokeVoidAsync("localStorage.setItem", "adminRememberMe", "true");
+            }
+
+            await _JS.ToastrSuccess($"Welcome back, {admin.FirstName}!");
+            Navigation.NavigateTo("/admin-dashboard");
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Login failed: {ex.Message}");
+            Console.WriteLine($"Admin login error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        showPassword = !showPassword;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if admin is already logged in
+        try
+        {
+            var storedAdminId = await _JS.InvokeAsync<string>("localStorage.getItem", "currentAdminId");
+            if (!string.IsNullOrEmpty(storedAdminId))
+            {
+                Navigation.NavigateTo("/admin-dashboard");
+                return;
+            }
+        }
+        catch
+        {
+            // Continue with login page
+        }
+    }
+
+    private class AdminLoginModel
+    {
+        [Required(ErrorMessage = "Username or email is required")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required")]
+        [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
+        public string Password { get; set; } = string.Empty;
+
+        public bool RememberMe { get; set; } = false;
+    }
+}

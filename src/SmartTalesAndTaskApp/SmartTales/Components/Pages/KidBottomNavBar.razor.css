@@ -1,0 +1,101 @@
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 12px;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+    z-index: 1000;
+}
+
+.nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+    color: #666;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+.nav-item:hover {
+    color: var(--primary-color);
+    background: rgba(124, 77, 255, 0.1);
+}
+
+.nav-item.active {
+    color: var(--primary-color);
+}
+
+.nav-icon {
+    font-size: 1.4rem;
+    position: relative;
+}
+
+.nav-text {
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+/* Award Icon Styles */
+.bi-award-fill {
+    font-size: 1.4rem;
+    color: #FFD700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.nav-item:hover .bi-award-fill {
+    transform: scale(1.1);
+    color: #FFA500;
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.nav-item.active .bi-award-fill {
+    color: #FFA500;
+}
+
+/* Notification Icon Styles */
+.bi-bell-fill {
+    font-size: 1.4rem;
+    color: #666;
+    transition: all 0.3s ease;
+}
+
+.notification-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: var(--accent-color);
+    color: white;
+    font-size: 0.7rem;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.nav-item:hover .bi-bell-fill {
+    transform: scale(1.1);
+    color: var(--primary-color);
+}
+
+.nav-item.active .bi-bell-fill {
+    color: var(--primary-color);
+}
+
+/* Settings Icon Animation */
+.nav-item:hover .nav-icon {
+    transform: rotate(15deg);
+} 

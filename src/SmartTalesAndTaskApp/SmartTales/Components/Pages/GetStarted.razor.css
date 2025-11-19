@@ -1,0 +1,257 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', 'Roboto', sans-serif;
+}
+
+body {
+    background-color: #ffffff;
+    overflow-x: hidden;
+    color: #333333;
+    transition: background-color 0.5s ease, color 0.5s ease;
+}
+
+    body.dark-mode {
+        background-color: #0a0a0a;
+        color: #ffffff;
+    }
+
+/* Main container */
+.container {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    background-color: #ffffff;
+}
+
+/* Content wrapper */
+.content-wrapper {
+    display: flex;
+    height: 100%;
+    width: 100%;
+}
+
+/* Image side */
+.image-side {
+    flex: 1.2;
+    position: relative;
+    overflow: hidden;
+}
+
+.image-side img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(0,0,0,0.4), rgba(0,0,0,0.1));
+}
+
+/* Text side */
+.text-side {
+    flex: 0.8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    position: relative;
+}
+
+/* Add decorative element */
+.text-side::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 8px;
+    height: 60px;
+    background: linear-gradient(to bottom, #2196F3, #1976D2);
+    border-radius: 0 0 4px 4px;
+}
+
+.text-content {
+    max-width: 500px;
+    animation: fadeIn 0.8s ease-out;
+}
+
+h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #333333;
+    margin-bottom: 1.5rem;
+    line-height: 1.2;
+    position: relative;
+}
+
+h1::after {
+    content: '';
+    display: block;
+    width: 60px;
+    height: 4px;
+    background: linear-gradient(90deg, #2196F3, #1976D2);
+    margin-top: 15px;
+    border-radius: 2px;
+}
+
+p {
+    font-size: 1.1rem;
+    color: #666666;
+    margin-bottom: 2rem;
+    line-height: 1.6;
+}
+
+.cta-button {
+    background: linear-gradient(45deg, #2196F3, #1976D2);
+    color: white;
+    border: none;
+    border-radius: 30px;
+    padding: 12px 30px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 5px 15px rgba(33, 150, 243, 0.3);
+}
+
+.arrow {
+    font-size: 1.3rem;
+    transition: transform 0.3s ease;
+}
+
+.cta-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(33, 150, 243, 0.4);
+}
+
+.cta-button:hover .arrow {
+    transform: translateX(5px);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 992px) {
+    h1 {
+        font-size: 2.2rem;
+    }
+    
+    p {
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .content-wrapper {
+        flex-direction: column;
+    }
+    
+    .image-side {
+        flex: 0 0 40%;
+    }
+    
+    .overlay {
+        background: linear-gradient(0deg, rgba(0,0,0,0.4), rgba(0,0,0,0.1));
+    }
+    
+    .text-side {
+        flex: 0 0 60%;
+        padding: 1.5rem;
+    }
+    
+    .text-side::before {
+        width: 60px;
+        height: 8px;
+        border-radius: 4px;
+    }
+    
+    h1 {
+        font-size: 1.8rem;
+        margin-bottom: 1rem;
+    }
+    
+    p {
+        font-size: 0.95rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .cta-button {
+        padding: 10px 20px;
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .image-side {
+        flex: 0 0 35%;
+    }
+    
+    .text-side {
+        flex: 0 0 65%;
+        padding: 1rem;
+    }
+    
+    h1 {
+        font-size: 1.5rem;
+    }
+    
+    h1::after {
+        width: 40px;
+        margin-top: 10px;
+    }
+    
+    p {
+        font-size: 0.9rem;
+        margin-bottom: 1.25rem;
+    }
+    
+    .cta-button {
+        padding: 8px 16px;
+        font-size: 0.9rem;
+    }
+}
+
+/* Landscape mode fix */
+@media (max-height: 600px) and (orientation: landscape) {
+    .content-wrapper {
+        flex-direction: row;
+    }
+    
+    .image-side {
+        flex: 0.8;
+    }
+    
+    .text-side {
+        flex: 1.2;
+    }
+    
+    h1 {
+        font-size: 1.6rem;
+        margin-bottom: 0.8rem;
+    }
+    
+    p {
+        margin-bottom: 1rem;
+    }
+}

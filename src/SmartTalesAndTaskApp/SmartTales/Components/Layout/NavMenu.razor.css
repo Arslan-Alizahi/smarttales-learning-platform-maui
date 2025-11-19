@@ -1,0 +1,41 @@
+/* Ensure the toggle button is visible */
+.theme-toggle-checkbox {
+    display: inline-block; /* Makes the checkbox visible */
+    margin-left: 10px; /* Adds spacing between the label and checkbox */
+}
+
+.theme-toggle-label {
+    cursor: pointer;
+    font-size: 16px;
+    background-color: #E0E0E0;
+    color: black;
+    padding: 10px 20px;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+    margin-left: 5px;
+}
+
+/* When checkbox is checked, apply the dark theme */
+.theme-toggle-checkbox:checked ~ body {
+    background-color: #333;
+    color: white;
+}
+
+/* Adjusting the navbar appearance */
+.navbar-dark {
+    background-color: #333;
+}
+
+    .navbar-dark .navbar-brand {
+        color: white;
+    }
+
+/* Style for nav links */
+.nav-link {
+    color: white;
+    text-decoration: none;
+}
+
+    .nav-link:hover {
+        color: #ddd;
+    }

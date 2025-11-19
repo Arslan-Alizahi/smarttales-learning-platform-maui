@@ -1,0 +1,725 @@
+@page "/admin-users"
+@using SmartTales.Model
+@using SmartTales.Service
+@using SmartTales.Data
+@using System.ComponentModel.DataAnnotations
+@inject AdminService _adminService
+@inject NavigationManager Navigation
+@inject IJSRuntime _JS
+
+<div class="user-management-container">
+    <!-- Header -->
+    <div class="user-management-header">
+        <div class="header-left">
+            <h1>User Management</h1>
+            <p>Manage all users in the system</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn-export" @onclick="ExportUsers">
+                <i class="fas fa-download"></i>
+                Export
+            </button>
+            <button class="btn-add-user" @onclick="ShowAddUserModal">
+                <i class="fas fa-plus"></i>
+                Add User
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters and Search -->
+    <div class="filters-section">
+        <div class="search-container">
+            <div class="search-input-wrapper">
+                <i class="fas fa-search"></i>
+                <input type="text" @bind="searchTerm" @oninput="OnSearchInput" placeholder="Search users by name or email..." class="search-input" />
+                @if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    <button class="clear-search" @onclick="ClearSearch">
+                        <i class="fas fa-times"></i>
+                    </button>
+                }
+            </div>
+        </div>
+        
+        <div class="filter-controls">
+            <select value="@selectedRole" @onchange="OnRoleFilterChange" class="role-filter">
+                <option value="">All Roles</option>
+                <option value="Kid">Kids</option>
+                <option value="Parent">Parents</option>
+                <option value="Teacher">Teachers</option>
+            </select>
+            
+            <div class="bulk-actions" style="display: @(selectedUsers.Any() ? "flex" : "none")">
+                <span class="selected-count">@selectedUsers.Count selected</span>
+                <button class="btn-bulk-delete" @onclick="ShowBulkDeleteConfirmation">
+                    <i class="fas fa-trash"></i>
+                    Delete Selected
+                </button>
+                <button class="btn-bulk-role" @onclick="ShowBulkRoleModal">
+                    <i class="fas fa-users-cog"></i>
+                    Change Role
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="users-table-container">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Loading users...</span>
+            </div>
+        }
+        else if (filteredUsers.Any())
+        {
+            <table class="users-table">
+                <thead>
+                    <tr>
+                        <th>
+                            <input type="checkbox" @onchange="ToggleSelectAll" checked="@(selectedUsers.Count == filteredUsers.Count && filteredUsers.Any())" />
+                        </th>
+                        <th @onclick='() => SortUsers("Name")' class="sortable">
+                            Name
+                            <i class="fas @GetSortIcon("Name")"></i>
+                        </th>
+                        <th @onclick='() => SortUsers("Email")' class="sortable">
+                            Email
+                            <i class="fas @GetSortIcon("Email")"></i>
+                        </th>
+                        <th @onclick='() => SortUsers("Role")' class="sortable">
+                            Role
+                            <i class="fas @GetSortIcon("Role")"></i>
+                        </th>
+                        <th>Phone</th>
+                        <th>Grade/Specialization</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in GetPagedUsers())
+                    {
+                        <tr class="@(selectedUsers.Contains(user.Id) ? "selected" : "")">
+                            <td>
+                                <input type="checkbox" @onchange="(e) => ToggleUserSelection(user.Id, (bool)e.Value)" checked="@selectedUsers.Contains(user.Id)" />
+                            </td>
+                            <td>
+                                <div class="user-info">
+                                    <div class="user-avatar">
+                                        <i class="fas @GetUserRoleIcon(user.Role)"></i>
+                                    </div>
+                                    <div class="user-details">
+                                        <div class="user-name">@user.FirstName @user.LastName</div>
+                                        <div class="user-id">ID: @user.Id</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>@user.Email</td>
+                            <td>
+                                <span class="role-badge @user.Role.ToLower()">@user.Role</span>
+                            </td>
+                            <td>@(user.PhoneNumber ?? "N/A")</td>
+                            <td>
+                                @if (user.Role == "Kid")
+                                {
+                                    <span>@(user.GradeLevel ?? "N/A")</span>
+                                }
+                                else if (user.Role == "Teacher")
+                                {
+                                    <span>@(user.Specialization ?? "N/A")</span>
+                                }
+                                else
+                                {
+                                    <span>-</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-edit" @onclick="() => EditUser(user)" title="Edit User">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn-reset-password" @onclick="() => ShowResetPasswordModal(user)" title="Reset Password">
+                                        <i class="fas fa-key"></i>
+                                    </button>
+                                    <button class="btn-delete" @onclick="() => ShowDeleteConfirmation(user)" title="Delete User">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, filteredUsers.Count) of @filteredUsers.Count users
+                </div>
+                <div class="pagination-controls">
+                    <button class="btn-page" @onclick="() => ChangePage(currentPage - 1)" disabled="@(currentPage <= 1)">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    
+                    @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                    {
+                        <button class="btn-page @(i == currentPage ? "active" : "")" @onclick="() => ChangePage(i)">
+                            @i
+                        </button>
+                    }
+                    
+                    <button class="btn-page" @onclick="() => ChangePage(currentPage + 1)" disabled="@(currentPage >= totalPages)">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="no-users-state">
+                <i class="fas fa-users"></i>
+                <h3>No users found</h3>
+                <p>@(string.IsNullOrEmpty(searchTerm) ? "No users in the system yet." : $"No users match '{searchTerm}'")</p>
+                @if (string.IsNullOrEmpty(searchTerm))
+                {
+                    <button class="btn-add-first-user" @onclick="ShowAddUserModal">
+                        <i class="fas fa-plus"></i>
+                        Add First User
+                    </button>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modals will be added here -->
+@if (showDeleteConfirmation)
+{
+    <div class="modal-overlay">
+        <div class="modal-content delete-modal">
+            <h3>Delete User</h3>
+            <p>Are you sure you want to delete <strong>@userToDelete?.FirstName @userToDelete?.LastName</strong>?</p>
+            <p class="warning-text">This action cannot be undone.</p>
+            <div class="modal-buttons">
+                <button class="btn-cancel" @onclick="() => showDeleteConfirmation = false">Cancel</button>
+                <button class="btn-confirm-delete" @onclick="ConfirmDeleteUser">Delete User</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showResetPasswordModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-content reset-password-modal">
+            <h3>Reset Password</h3>
+            <p>Reset password for <strong>@userToResetPassword?.FirstName @userToResetPassword?.LastName</strong></p>
+            <div class="form-group">
+                <label>New Password</label>
+                <input type="password" @bind="newPassword" class="form-control" placeholder="Enter new password" />
+            </div>
+            <div class="form-group">
+                <label>Confirm Password</label>
+                <input type="password" @bind="confirmPassword" class="form-control" placeholder="Confirm new password" />
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-cancel" @onclick="() => { showResetPasswordModal = false; newPassword = string.Empty; confirmPassword = string.Empty; }">Cancel</button>
+                <button class="btn-confirm" @onclick="ConfirmResetPassword" disabled="@(string.IsNullOrEmpty(newPassword) || newPassword != confirmPassword)">Reset Password</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showUserModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-content user-modal">
+            <h3>@(isEditMode ? "Edit User" : "Add New User")</h3>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>First Name *</label>
+                    <input type="text" @bind="currentUser.FirstName" class="form-control" placeholder="Enter first name" />
+                </div>
+                <div class="form-group">
+                    <label>Last Name *</label>
+                    <input type="text" @bind="currentUser.LastName" class="form-control" placeholder="Enter last name" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Email *</label>
+                    <input type="email" @bind="currentUser.Email" class="form-control" placeholder="Enter email address" />
+                </div>
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="text" @bind="currentUser.PhoneNumber" class="form-control" placeholder="Enter phone number" />
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Role *</label>
+                    <select @bind="currentUser.Role" class="form-control">
+                        <option value="">Select Role</option>
+                        <option value="Kid">Kid</option>
+                        <option value="Parent">Parent</option>
+                        <option value="Teacher">Teacher</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Address</label>
+                    <input type="text" @bind="currentUser.Address" class="form-control" placeholder="Enter address" />
+                </div>
+            </div>
+
+            @if (currentUser.Role == "Kid")
+            {
+                <div class="form-group">
+                    <label>Grade Level</label>
+                    <input type="text" @bind="currentUser.GradeLevel" class="form-control" placeholder="Enter grade level" />
+                </div>
+            }
+
+            @if (currentUser.Role == "Teacher")
+            {
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Specialization</label>
+                        <input type="text" @bind="currentUser.Specialization" class="form-control" placeholder="Enter specialization" />
+                    </div>
+                    <div class="form-group">
+                        <label>Years of Experience</label>
+                        <input type="number" @bind="currentUser.YearsOfExperience" class="form-control" placeholder="Enter years of experience" />
+                    </div>
+                </div>
+            }
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>@(isEditMode ? "New Password (leave blank to keep current)" : "Password *")</label>
+                    <input type="password" @bind="userPassword" class="form-control" placeholder="Enter password" />
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" @bind="confirmUserPassword" class="form-control" placeholder="Confirm password" />
+                </div>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="btn-cancel" @onclick="CloseUserModal">Cancel</button>
+                <button class="btn-confirm" @onclick="SaveUser">@(isEditMode ? "Update User" : "Create User")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<User> allUsers = new();
+    private List<User> filteredUsers = new();
+    private HashSet<int> selectedUsers = new();
+    private bool isLoading = true;
+    
+    // Search and filtering
+    private string searchTerm = string.Empty;
+    private string selectedRole = string.Empty;
+    
+    // Sorting
+    private string sortColumn = string.Empty;
+    private bool sortAscending = true;
+    
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages => (int)Math.Ceiling((double)filteredUsers.Count / pageSize);
+    
+    // Modals
+    private bool showDeleteConfirmation = false;
+    private bool showResetPasswordModal = false;
+    private User? userToDelete;
+    private User? userToResetPassword;
+    private string newPassword = string.Empty;
+    private string confirmPassword = string.Empty;
+    
+    // Admin context
+    private int currentAdminId;
+
+    // Edit/Add User Modal
+    private bool showUserModal = false;
+    private bool isEditMode = false;
+    private User currentUser = new User();
+    private string userPassword = string.Empty;
+    private string confirmUserPassword = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var storedAdminId = await _JS.InvokeAsync<string>("localStorage.getItem", "currentAdminId");
+            if (string.IsNullOrEmpty(storedAdminId) || !int.TryParse(storedAdminId, out currentAdminId))
+            {
+                Navigation.NavigateTo("/admin-login");
+                return;
+            }
+
+            await LoadUsers();
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading users: {ex.Message}");
+        }
+    }
+
+    private async Task LoadUsers()
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+            
+            allUsers = (await _adminService.GetAllUsersAsync(currentAdminId)).ToList();
+            FilterUsers();
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading users: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnRoleFilterChange(ChangeEventArgs e)
+    {
+        selectedRole = e.Value?.ToString() ?? string.Empty;
+        FilterUsers();
+    }
+
+    private void FilterUsers()
+    {
+        filteredUsers = allUsers.Where(u =>
+            (string.IsNullOrEmpty(selectedRole) || u.Role == selectedRole) &&
+            (string.IsNullOrEmpty(searchTerm) ||
+             u.FirstName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+             u.LastName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+             u.Email.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+        ).ToList();
+
+        ApplySort();
+        currentPage = 1; // Reset to first page when filtering
+        StateHasChanged();
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        await Task.Delay(300); // Debounce search
+        FilterUsers();
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = string.Empty;
+        FilterUsers();
+    }
+
+    private void SortUsers(string column)
+    {
+        if (sortColumn == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+        
+        ApplySort();
+        StateHasChanged();
+    }
+
+    private void ApplySort()
+    {
+        if (string.IsNullOrEmpty(sortColumn)) return;
+
+        filteredUsers = sortColumn switch
+        {
+            "Name" => sortAscending 
+                ? filteredUsers.OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ToList()
+                : filteredUsers.OrderByDescending(u => u.FirstName).ThenByDescending(u => u.LastName).ToList(),
+            "Email" => sortAscending 
+                ? filteredUsers.OrderBy(u => u.Email).ToList()
+                : filteredUsers.OrderByDescending(u => u.Email).ToList(),
+            "Role" => sortAscending 
+                ? filteredUsers.OrderBy(u => u.Role).ToList()
+                : filteredUsers.OrderByDescending(u => u.Role).ToList(),
+            _ => filteredUsers
+        };
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (sortColumn != column) return "fa-sort";
+        return sortAscending ? "fa-sort-up" : "fa-sort-down";
+    }
+
+    private List<User> GetPagedUsers()
+    {
+        return filteredUsers
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var isChecked = (bool)e.Value;
+        selectedUsers.Clear();
+        
+        if (isChecked)
+        {
+            foreach (var user in filteredUsers)
+            {
+                selectedUsers.Add(user.Id);
+            }
+        }
+        
+        StateHasChanged();
+    }
+
+    private void ToggleUserSelection(int userId, bool isSelected)
+    {
+        if (isSelected)
+        {
+            selectedUsers.Add(userId);
+        }
+        else
+        {
+            selectedUsers.Remove(userId);
+        }
+        
+        StateHasChanged();
+    }
+
+    private string GetUserRoleIcon(string role)
+    {
+        return role switch
+        {
+            "Kid" => "fa-child",
+            "Parent" => "fa-user-friends",
+            "Teacher" => "fa-chalkboard-teacher",
+            _ => "fa-user"
+        };
+    }
+
+    private void ShowDeleteConfirmation(User user)
+    {
+        userToDelete = user;
+        showDeleteConfirmation = true;
+    }
+
+    private async Task ConfirmDeleteUser()
+    {
+        if (userToDelete == null) return;
+
+        try
+        {
+            var success = await _adminService.DeleteUserAsync(userToDelete.Id, currentAdminId);
+            if (success)
+            {
+                await _JS.ToastrSuccess($"User {userToDelete.FirstName} {userToDelete.LastName} deleted successfully.");
+                await LoadUsers();
+            }
+            else
+            {
+                await _JS.ToastrError("Failed to delete user.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error deleting user: {ex.Message}");
+        }
+        finally
+        {
+            showDeleteConfirmation = false;
+            userToDelete = null;
+        }
+    }
+
+    private void ShowResetPasswordModal(User user)
+    {
+        userToResetPassword = user;
+        newPassword = string.Empty;
+        confirmPassword = string.Empty;
+        showResetPasswordModal = true;
+    }
+
+    private async Task ConfirmResetPassword()
+    {
+        if (userToResetPassword == null || string.IsNullOrEmpty(newPassword) || newPassword != confirmPassword)
+            return;
+
+        try
+        {
+            var success = await _adminService.ResetUserPasswordAsync(userToResetPassword.Id, newPassword, currentAdminId);
+            if (success)
+            {
+                await _JS.ToastrSuccess($"Password reset successfully for {userToResetPassword.FirstName} {userToResetPassword.LastName}.");
+            }
+            else
+            {
+                await _JS.ToastrError("Failed to reset password.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error resetting password: {ex.Message}");
+        }
+        finally
+        {
+            showResetPasswordModal = false;
+            userToResetPassword = null;
+            newPassword = string.Empty;
+            confirmPassword = string.Empty;
+        }
+    }
+
+    private void EditUser(User user)
+    {
+        isEditMode = true;
+        currentUser = new User
+        {
+            Id = user.Id,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            Email = user.Email,
+            PhoneNumber = user.PhoneNumber,
+            Role = user.Role,
+            GradeLevel = user.GradeLevel,
+            Address = user.Address,
+            Specialization = user.Specialization,
+            YearsOfExperience = user.YearsOfExperience
+        };
+        userPassword = string.Empty;
+        confirmUserPassword = string.Empty;
+        showUserModal = true;
+    }
+
+    private void ShowAddUserModal()
+    {
+        isEditMode = false;
+        currentUser = new User();
+        userPassword = string.Empty;
+        confirmUserPassword = string.Empty;
+        showUserModal = true;
+    }
+
+    private async Task SaveUser()
+    {
+        try
+        {
+            // Validate required fields
+            if (string.IsNullOrEmpty(currentUser.FirstName) || string.IsNullOrEmpty(currentUser.LastName) ||
+                string.IsNullOrEmpty(currentUser.Email) || string.IsNullOrEmpty(currentUser.Role))
+            {
+                await _JS.ToastrError("Please fill in all required fields.");
+                return;
+            }
+
+            // Validate password for new users
+            if (!isEditMode && string.IsNullOrEmpty(userPassword))
+            {
+                await _JS.ToastrError("Password is required for new users.");
+                return;
+            }
+
+            // Validate password confirmation
+            if (!string.IsNullOrEmpty(userPassword) && userPassword != confirmUserPassword)
+            {
+                await _JS.ToastrError("Passwords do not match.");
+                return;
+            }
+
+            // Set password if provided
+            if (!string.IsNullOrEmpty(userPassword))
+            {
+                currentUser.Password = userPassword;
+            }
+
+            if (isEditMode)
+            {
+                var result = await _adminService.UpdateUserAsync(currentUser, currentAdminId);
+                if (result != null)
+                {
+                    await _JS.ToastrSuccess($"User {currentUser.FirstName} {currentUser.LastName} updated successfully.");
+                    await LoadUsers();
+                    CloseUserModal();
+                }
+                else
+                {
+                    await _JS.ToastrError("Failed to update user.");
+                }
+            }
+            else
+            {
+                var result = await _adminService.CreateUserAsync(currentUser, currentAdminId);
+                await _JS.ToastrSuccess($"User {currentUser.FirstName} {currentUser.LastName} created successfully.");
+                await LoadUsers();
+                CloseUserModal();
+            }
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error saving user: {ex.Message}");
+        }
+    }
+
+    private void CloseUserModal()
+    {
+        showUserModal = false;
+        currentUser = new User();
+        userPassword = string.Empty;
+        confirmUserPassword = string.Empty;
+        isEditMode = false;
+    }
+
+    private void ShowBulkDeleteConfirmation()
+    {
+        // Show bulk delete confirmation
+        _JS.ToastrInfo("Bulk delete functionality will be implemented next.");
+    }
+
+    private void ShowBulkRoleModal()
+    {
+        // Show bulk role change modal
+        _JS.ToastrInfo("Bulk role change functionality will be implemented next.");
+    }
+
+    private async Task ExportUsers()
+    {
+        try
+        {
+            var exportData = await _adminService.ExportUsersDataAsync("csv", currentAdminId);
+            // In a real application, you would trigger a file download here
+            await _JS.ToastrSuccess("User data exported successfully!");
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error exporting users: {ex.Message}");
+        }
+    }
+}

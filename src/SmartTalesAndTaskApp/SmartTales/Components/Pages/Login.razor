@@ -1,0 +1,100 @@
+﻿@page "/login"
+
+<div class="login-page">
+    <!-- Background Elements -->
+    <div class="login-background">
+        <div class="bg-pattern"></div>
+        <div class="floating-shapes">
+            <div class="shape shape-1"></div>
+            <div class="shape shape-2"></div>
+            <div class="shape shape-3"></div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="login-wrapper">
+            <!-- Logo Section -->
+            <div class="login-header">
+                <div class="logo-container">
+                    <img src="images/logokids-removebg-preview.png" class="logo" alt="SmartTales Logo" />
+                    <h1 class="brand-title">Smart Tales & Task</h1>
+                </div>
+                <div class="welcome-text">
+                    <h2 class="welcome-title">Welcome Back!</h2>
+                    <p class="welcome-subtitle">Choose your role to continue your learning journey</p>
+                </div>
+            </div>
+
+            <!-- Login Options -->
+            <div class="login-options-grid">
+                <a href="kid-login" class="login-card kid-card">
+                    <div class="card-icon">
+                        <div class="icon-bg kid-bg">
+                            <i class="fas fa-child"></i>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <h3 class="card-title">Kid</h3>
+                        <p class="card-description">Join the adventure and learn through stories!</p>
+                    </div>
+                    <div class="card-arrow">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                </a>
+
+                <a href="teacher-login" class="login-card teacher-card">
+                    <div class="card-icon">
+                        <div class="icon-bg teacher-bg">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <h3 class="card-title">Teacher</h3>
+                        <p class="card-description">Manage your classroom and inspire students</p>
+                    </div>
+                    <div class="card-arrow">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                </a>
+
+                <a href="parent-login" class="login-card parent-card">
+                    <div class="card-icon">
+                        <div class="icon-bg parent-bg">
+                            <i class="fas fa-users"></i>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <h3 class="card-title">Parent</h3>
+                        <p class="card-description">Track your child's progress and achievements</p>
+                    </div>
+                    <div class="card-arrow">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="login-footer">
+                <div class="register-section">
+                    <p class="register-text">New to Smart Tales?</p>
+                    <a href="register" class="btn btn-outline btn-lg">Create Account</a>
+                </div>
+
+                <div class="admin-section">
+                    <a href="admin-login" class="admin-link">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Administrator Access</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Add any necessary code-behind logic here
+}
+
+<link href="css/login.css" rel="stylesheet" />
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />

@@ -1,0 +1,23 @@
+﻿@using Microsoft.AspNetCore.Components.Routing
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<div class="header-container">
+    <div class="header-content">
+        <button class="back-button" @onclick="NavigateBack">
+            <span class="back-icon">←</span>
+            Back
+        </button>
+        <h1 class="header-title">@Title</h1>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string Title { get; set; } = "SmartTales";
+
+    private async Task NavigateBack()
+    {
+        await JSRuntime.InvokeVoidAsync("history.back");
+    }
+}

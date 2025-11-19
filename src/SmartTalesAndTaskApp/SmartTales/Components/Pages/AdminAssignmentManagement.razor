@@ -1,0 +1,594 @@
+@using SmartTales.Data
+@using SmartTales.Model
+@using SmartTales.Service
+@using SmartTales.Service.Extensions
+@inject AdminService _adminService
+@inject IJSRuntime _JS
+@inject NavigationManager Navigation
+
+<div class="assignment-management-container">
+    <!-- Header -->
+    <div class="assignment-management-header">
+        <div class="header-left">
+            <h1>Assignment Management</h1>
+            <p>Oversee and manage all assignments across the platform</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn-add-assignment" @onclick="ShowAddAssignmentModal">
+                <i class="fas fa-plus"></i>
+                <span>Create Assignment</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="filters-section">
+        <div class="search-container">
+            <div class="search-input-wrapper">
+                <i class="fas fa-search"></i>
+                <input type="text" class="search-input" placeholder="Search assignments..." 
+                       @oninput="OnSearchInput" value="@searchTerm" />
+                @if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    <button class="clear-search" @onclick="ClearSearch">
+                        <i class="fas fa-times"></i>
+                    </button>
+                }
+            </div>
+        </div>
+        
+        <div class="filter-controls">
+            <select value="@selectedStatus" @onchange="OnStatusFilterChange" class="filter-select">
+                <option value="">All Statuses</option>
+                <option value="Active">Active</option>
+                <option value="Completed">Completed</option>
+                <option value="Overdue">Overdue</option>
+                <option value="Draft">Draft</option>
+            </select>
+            
+            <select value="@selectedSubject" @onchange="OnSubjectFilterChange" class="filter-select">
+                <option value="">All Subjects</option>
+                <option value="Math">Math</option>
+                <option value="Science">Science</option>
+                <option value="English">English</option>
+                <option value="History">History</option>
+                <option value="Art">Art</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Assignments Table -->
+    <div class="assignments-table-container">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <i class="fas fa-spinner fa-spin"></i>
+                <h3>Loading assignments...</h3>
+                <p>Please wait while we fetch the data.</p>
+            </div>
+        }
+        else if (!filteredAssignments.Any())
+        {
+            <div class="no-assignments-state">
+                <i class="fas fa-tasks"></i>
+                <h3>No assignments found</h3>
+                <p>@(string.IsNullOrEmpty(searchTerm) ? "No assignments have been created yet." : "No assignments match your search criteria.")</p>
+                @if (string.IsNullOrEmpty(searchTerm))
+                {
+                    <button class="btn-add-first-assignment" @onclick="ShowAddAssignmentModal">
+                        <i class="fas fa-plus"></i>
+                        <span>Create First Assignment</span>
+                    </button>
+                }
+            </div>
+        }
+        else
+        {
+            <table class="assignments-table">
+                <thead>
+                    <tr>
+                        <th class="sortable" @onclick='() => SortAssignments("Title")'>
+                            Assignment
+                            <i class="fas @GetSortIcon("Title")"></i>
+                        </th>
+                        <th class="sortable" @onclick='() => SortAssignments("Subject")'>
+                            Subject
+                            <i class="fas @GetSortIcon("Subject")"></i>
+                        </th>
+                        <th class="sortable" @onclick='() => SortAssignments("Teacher")'>
+                            Teacher
+                            <i class="fas @GetSortIcon("Teacher")"></i>
+                        </th>
+                        <th class="sortable" @onclick='() => SortAssignments("DueDate")'>
+                            Due Date
+                            <i class="fas @GetSortIcon("DueDate")"></i>
+                        </th>
+                        <th>Status</th>
+                        <th>Submissions</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var assignment in GetPagedAssignments())
+                    {
+                        <tr>
+                            <td>
+                                <div class="assignment-info">
+                                    <div class="assignment-title">@assignment.Title</div>
+                                    <div class="assignment-description">@assignment.Description</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="subject-badge @assignment.Subject.ToLower()">
+                                    @assignment.Subject
+                                </span>
+                            </td>
+                            <td>
+                                <div class="teacher-info">
+                                    <div class="teacher-name">@assignment.TeacherName</div>
+                                    <div class="teacher-email">@assignment.TeacherEmail</div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="due-date @(assignment.IsOverdue ? "overdue" : "")">
+                                    @assignment.DueDate.ToString("MMM dd, yyyy")
+                                    @if (assignment.IsOverdue)
+                                    {
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    }
+                                </div>
+                            </td>
+                            <td>
+                                <span class="status-badge @assignment.Status.ToLower()">
+                                    @assignment.Status
+                                </span>
+                            </td>
+                            <td>
+                                <div class="submission-count">
+                                    <span class="count">@assignment.SubmissionCount</span>
+                                    <span class="total">/ @assignment.TotalStudents</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-view" @onclick="() => ViewAssignment(assignment)" title="View Assignment">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn-edit" @onclick="() => EditAssignment(assignment)" title="Edit Assignment">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn-delete" @onclick="() => ShowDeleteConfirmation(assignment)" title="Delete Assignment">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="pagination-container">
+                <div class="pagination-info">
+                    Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, filteredAssignments.Count) of @filteredAssignments.Count assignments
+                </div>
+                <div class="pagination-controls">
+                    <button class="btn-page" @onclick="() => ChangePage(currentPage - 1)" disabled="@(currentPage <= 1)">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                    {
+                        <button class="btn-page @(i == currentPage ? "active" : "")" @onclick="() => ChangePage(i)">
+                            @i
+                        </button>
+                    }
+                    <button class="btn-page" @onclick="() => ChangePage(currentPage + 1)" disabled="@(currentPage >= totalPages)">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Add/Edit Assignment Modal -->
+@if (showAssignmentModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-content assignment-modal">
+            <h3>@(isEditMode ? "Edit Assignment" : "Create New Assignment")</h3>
+            
+            <div class="form-group">
+                <label>Title *</label>
+                <input type="text" @bind="currentAssignment.Title" class="form-control" placeholder="Enter assignment title" />
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea @bind="currentAssignment.Description" class="form-control" rows="3" placeholder="Enter assignment description"></textarea>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Subject *</label>
+                    <select @bind="currentAssignment.Subject" class="form-control">
+                        <option value="">Select Subject</option>
+                        <option value="Math">Math</option>
+                        <option value="Science">Science</option>
+                        <option value="English">English</option>
+                        <option value="History">History</option>
+                        <option value="Art">Art</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Due Date *</label>
+                    <input type="datetime-local" @bind="currentAssignment.DueDate" class="form-control" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Teacher Email *</label>
+                <input type="email" @bind="currentAssignment.TeacherEmail" class="form-control" placeholder="Enter teacher's email" />
+            </div>
+
+            <div class="modal-buttons">
+                <button class="btn-cancel" @onclick="CloseAssignmentModal">Cancel</button>
+                <button class="btn-confirm" @onclick="SaveAssignment">@(isEditMode ? "Update Assignment" : "Create Assignment")</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteConfirmation)
+{
+    <div class="modal-overlay">
+        <div class="modal-content delete-modal">
+            <h3>Delete Assignment</h3>
+            <p>Are you sure you want to delete the assignment <strong>"@assignmentToDelete?.Title"</strong>?</p>
+            <p class="warning-text">This action cannot be undone and will remove all associated submissions.</p>
+            <div class="modal-buttons">
+                <button class="btn-cancel" @onclick="() => showDeleteConfirmation = false">Cancel</button>
+                <button class="btn-confirm-delete" @onclick="ConfirmDeleteAssignment">Delete Assignment</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // Data models
+    public class AssignmentViewModel
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Subject { get; set; } = string.Empty;
+        public DateTime DueDate { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string TeacherName { get; set; } = string.Empty;
+        public string TeacherEmail { get; set; } = string.Empty;
+        public int SubmissionCount { get; set; }
+        public int TotalStudents { get; set; }
+        public bool IsOverdue => DueDate < DateTime.Now && Status != "Completed";
+    }
+
+    // Component state
+    private List<AssignmentViewModel> allAssignments = new();
+    private List<AssignmentViewModel> filteredAssignments = new();
+    private bool isLoading = true;
+    
+    // Search and filtering
+    private string searchTerm = string.Empty;
+    private string selectedStatus = string.Empty;
+    private string selectedSubject = string.Empty;
+    
+    // Sorting
+    private string sortColumn = string.Empty;
+    private bool sortAscending = true;
+    
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages => (int)Math.Ceiling((double)filteredAssignments.Count / pageSize);
+    
+    // Modals
+    private bool showAssignmentModal = false;
+    private bool showDeleteConfirmation = false;
+    private bool isEditMode = false;
+    private AssignmentViewModel currentAssignment = new();
+    private AssignmentViewModel? assignmentToDelete;
+    
+    // Admin context
+    private int currentAdminId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var storedAdminId = await _JS.InvokeAsync<string>("localStorage.getItem", "currentAdminId");
+            if (string.IsNullOrEmpty(storedAdminId) || !int.TryParse(storedAdminId, out currentAdminId))
+            {
+                Navigation.NavigateTo("/admin-login");
+                return;
+            }
+
+            await LoadAssignments();
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading assignments: {ex.Message}");
+        }
+    }
+
+    private async Task LoadAssignments()
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            // For now, create sample data since we don't have assignment repository yet
+            allAssignments = new List<AssignmentViewModel>
+            {
+                new AssignmentViewModel
+                {
+                    Id = 1,
+                    Title = "Math Homework - Chapter 5",
+                    Description = "Complete exercises 1-20 from Chapter 5",
+                    Subject = "Math",
+                    DueDate = DateTime.Now.AddDays(3),
+                    Status = "Active",
+                    TeacherName = "John Smith",
+                    TeacherEmail = "john.smith@school.com",
+                    SubmissionCount = 15,
+                    TotalStudents = 25
+                },
+                new AssignmentViewModel
+                {
+                    Id = 2,
+                    Title = "Science Project - Solar System",
+                    Description = "Create a model of the solar system",
+                    Subject = "Science",
+                    DueDate = DateTime.Now.AddDays(-2),
+                    Status = "Overdue",
+                    TeacherName = "Jane Doe",
+                    TeacherEmail = "jane.doe@school.com",
+                    SubmissionCount = 8,
+                    TotalStudents = 20
+                },
+                new AssignmentViewModel
+                {
+                    Id = 3,
+                    Title = "English Essay - My Summer Vacation",
+                    Description = "Write a 500-word essay about your summer vacation",
+                    Subject = "English",
+                    DueDate = DateTime.Now.AddDays(7),
+                    Status = "Active",
+                    TeacherName = "Mary Johnson",
+                    TeacherEmail = "mary.johnson@school.com",
+                    SubmissionCount = 22,
+                    TotalStudents = 30
+                }
+            };
+
+            FilterAssignments();
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error loading assignments: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        await Task.Delay(300); // Debounce search
+        FilterAssignments();
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = string.Empty;
+        FilterAssignments();
+    }
+
+    private void OnStatusFilterChange(ChangeEventArgs e)
+    {
+        selectedStatus = e.Value?.ToString() ?? string.Empty;
+        FilterAssignments();
+    }
+
+    private void OnSubjectFilterChange(ChangeEventArgs e)
+    {
+        selectedSubject = e.Value?.ToString() ?? string.Empty;
+        FilterAssignments();
+    }
+
+    private void FilterAssignments()
+    {
+        filteredAssignments = allAssignments.Where(a =>
+            (string.IsNullOrEmpty(searchTerm) ||
+             a.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+             a.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+             a.TeacherName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrEmpty(selectedStatus) || a.Status == selectedStatus) &&
+            (string.IsNullOrEmpty(selectedSubject) || a.Subject == selectedSubject)
+        ).ToList();
+
+        ApplySort();
+        currentPage = 1; // Reset to first page when filtering
+        StateHasChanged();
+    }
+
+    private void SortAssignments(string column)
+    {
+        if (sortColumn == column)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            sortAscending = true;
+        }
+
+        ApplySort();
+        StateHasChanged();
+    }
+
+    private void ApplySort()
+    {
+        if (string.IsNullOrEmpty(sortColumn)) return;
+
+        filteredAssignments = sortColumn switch
+        {
+            "Title" => sortAscending
+                ? filteredAssignments.OrderBy(a => a.Title).ToList()
+                : filteredAssignments.OrderByDescending(a => a.Title).ToList(),
+            "Subject" => sortAscending
+                ? filteredAssignments.OrderBy(a => a.Subject).ToList()
+                : filteredAssignments.OrderByDescending(a => a.Subject).ToList(),
+            "Teacher" => sortAscending
+                ? filteredAssignments.OrderBy(a => a.TeacherName).ToList()
+                : filteredAssignments.OrderByDescending(a => a.TeacherName).ToList(),
+            "DueDate" => sortAscending
+                ? filteredAssignments.OrderBy(a => a.DueDate).ToList()
+                : filteredAssignments.OrderByDescending(a => a.DueDate).ToList(),
+            _ => filteredAssignments
+        };
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (sortColumn != column) return "fa-sort";
+        return sortAscending ? "fa-sort-up" : "fa-sort-down";
+    }
+
+    private List<AssignmentViewModel> GetPagedAssignments()
+    {
+        return filteredAssignments
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowAddAssignmentModal()
+    {
+        isEditMode = false;
+        currentAssignment = new AssignmentViewModel { DueDate = DateTime.Now.AddDays(7) };
+        showAssignmentModal = true;
+    }
+
+    private void EditAssignment(AssignmentViewModel assignment)
+    {
+        isEditMode = true;
+        currentAssignment = new AssignmentViewModel
+        {
+            Id = assignment.Id,
+            Title = assignment.Title,
+            Description = assignment.Description,
+            Subject = assignment.Subject,
+            DueDate = assignment.DueDate,
+            TeacherEmail = assignment.TeacherEmail
+        };
+        showAssignmentModal = true;
+    }
+
+    private void ViewAssignment(AssignmentViewModel assignment)
+    {
+        // Navigate to assignment details view
+        _JS.ToastrInfo($"Viewing assignment: {assignment.Title}");
+    }
+
+    private void CloseAssignmentModal()
+    {
+        showAssignmentModal = false;
+        currentAssignment = new AssignmentViewModel();
+        isEditMode = false;
+    }
+
+    private async Task SaveAssignment()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(currentAssignment.Title) || string.IsNullOrEmpty(currentAssignment.Subject) ||
+                string.IsNullOrEmpty(currentAssignment.TeacherEmail))
+            {
+                await _JS.ToastrError("Please fill in all required fields.");
+                return;
+            }
+
+            if (isEditMode)
+            {
+                var existingAssignment = allAssignments.FirstOrDefault(a => a.Id == currentAssignment.Id);
+                if (existingAssignment != null)
+                {
+                    existingAssignment.Title = currentAssignment.Title;
+                    existingAssignment.Description = currentAssignment.Description;
+                    existingAssignment.Subject = currentAssignment.Subject;
+                    existingAssignment.DueDate = currentAssignment.DueDate;
+                    existingAssignment.TeacherEmail = currentAssignment.TeacherEmail;
+                }
+                await _JS.ToastrSuccess("Assignment updated successfully.");
+            }
+            else
+            {
+                currentAssignment.Id = allAssignments.Count + 1;
+                currentAssignment.Status = "Active";
+                currentAssignment.TeacherName = "Teacher"; // This would come from user lookup
+                currentAssignment.SubmissionCount = 0;
+                currentAssignment.TotalStudents = 25; // This would come from class enrollment
+                allAssignments.Add(currentAssignment);
+                await _JS.ToastrSuccess("Assignment created successfully.");
+            }
+
+            FilterAssignments();
+            CloseAssignmentModal();
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error saving assignment: {ex.Message}");
+        }
+    }
+
+    private void ShowDeleteConfirmation(AssignmentViewModel assignment)
+    {
+        assignmentToDelete = assignment;
+        showDeleteConfirmation = true;
+    }
+
+    private async Task ConfirmDeleteAssignment()
+    {
+        if (assignmentToDelete == null) return;
+
+        try
+        {
+            allAssignments.Remove(assignmentToDelete);
+            await _JS.ToastrSuccess("Assignment deleted successfully.");
+            FilterAssignments();
+        }
+        catch (Exception ex)
+        {
+            await _JS.ToastrError($"Error deleting assignment: {ex.Message}");
+        }
+        finally
+        {
+            showDeleteConfirmation = false;
+            assignmentToDelete = null;
+        }
+    }
+}
