@@ -297,3 +297,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Support
 
 For issues and feature requests, please [open an issue](https://github.com/yourusername/smart-tales-app/issues).
+
+**Developed by Arslandevs | Powered by CodingZoo**
